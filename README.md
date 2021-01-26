@@ -1,7 +1,12 @@
 # SimplEd
-Very simple font editor for CMM2,
-you need also [TUI.INC](https://github.com/jirsoft/TUI/blob/master/TUI.INC)
+Simple font editor for CMM2 with basic mouse support.
 
+#### v0.31
+	mouse support improvements (auto search for correct port, release on ond...)
+	bugfix of the bottom row of characters
+	included actual copy of TUI.INC
+	UNDO extended to more operations
+	
 #### v0.30
 	mouse support:
 		1. in editor: LEFT button sets pixels, RIGHT button clears pixels (both also set cursor)
