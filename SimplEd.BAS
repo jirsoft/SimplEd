@@ -10,15 +10,16 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.31"
+CONST VERSION.SE = "0.32"
 
 CONST ZERO.SE = CHR$(0)
 DIM STRING CWD.SE = MM.INFO$(PATH)
 CHDIR CWD.SE
 DIM STRING LAST.SE = "NewFont", EXPORT.SE = CWD.SE + "SE_EXPORTED"
+DIM INTEGER T_TIME.SE = 0, C_TIME.SE = 0
 
-#INCLUDE "TUI.INC"
-'#INCLUDE "../LIB/TUI.INC"
+'#INCLUDE "TUI.INC"
+#INCLUDE "../LIB/TUI.INC"
 
 CONST NAME_CHARS.SE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#%^&*-+()[]"
 
@@ -51,7 +52,7 @@ DIM STRING MACRO.SE = ""
 DIM STRING MACRO_NAME.SE(20)
 DIM STRING MACRO_CALL.SE(20)
 
-DIM INTEGER MOU.SE = 0, MOU_X.SE = -1, MOU_Y.SE = -1, MOU_L.SE = -1, MOU_R.SE = -1, MOU_W.SE = -1
+DIM INTEGER MOU.SE = -1, MOU_X.SE = -1, MOU_Y.SE = -1, MOU_L.SE = -1, MOU_R.SE = -1, MOU_W.SE = -1
 
 SEinit
 SEinitMouse
@@ -60,12 +61,12 @@ ON KEY 157, SEscreenShot
 
 
 DO 
-  IF MOU.SE THEN SEtestMouse
+  IF MOU.SE > -1 THEN SEtestMouse
   kk = INKEY$
   IF kk<>"" THEN 
-    IF MOU.SE THEN GUI CURSOR HIDE
+    IF MOU.SE > -1 THEN GUI CURSOR HIDE
     SEkey(kk)
-    IF MOU.SE THEN GUI CURSOR SHOW
+    IF MOU.SE > -1 THEN GUI CURSOR SHOW
   ENDIF
 LOOP
 
@@ -75,18 +76,31 @@ SUB SEinitMouse
   'try to find mouse and set MOU.SE to it's port
 
   LOCAL INTEGER i
-
-  MOU.SE = 0
+  IF MM.INFO(VERSION) >= 5.07 THEN
+    MOU.SE = MM.INFO(OPTION MOUSE)
+    ON ERROR SKIP
+    CONTROLLER MOUSE OPEN MOU.SE
+    IF MM.ERRNO <> 0 THEN
+      MOU.SE = -1
+    ENDIF
+  ELSE
+    MOU.SE = -1
+  ENDIF 
   FOR i = 1 TO 3
-    IF NOT MOU.SE THEN
+    IF MOU.SE < 0 THEN
       ON ERROR SKIP
       CONTROLLER MOUSE OPEN i
       IF MM.ERRNO = 0 THEN
         MOU.SE = i
-        GUI CURSOR ON 0, MOUSE(X, MOU.SE), MOUSE(Y, MOU.SE), RGB(GREEN)
-        EXIT SUB
       ENDIF
-    ELSE
+    ENDIF
+    IF MOU.SE >= 0 THEN
+      IF TUIquestion("MOUSE TEST", "Mouse found on port " + STR$(MOU.SE) + ", use it?") THEN
+        LOAD PNG "Mouse.PNG", 640, 50
+        GUI CURSOR ON 0, MOUSE(X, MOU.SE), MOUSE(Y, MOU.SE), RGB(GREEN)
+      ELSE
+        MOU.SE = -1
+      ENDIF
       EXIT SUB
     ENDIF
   NEXT i
@@ -257,7 +271,7 @@ SUB SEkey(kk AS STRING)
         CLS
         CHDIR TUIgetParent(EXPORT.SE)
         OPTION BREAK 3
-        IF MOU.SE THEN CONTROLLER MOUSE CLOSE MOU.SE
+        IF MOU.SE > -1 THEN CONTROLLER MOUSE CLOSE MOU.SE
         END
       ENDIF
 
@@ -531,6 +545,7 @@ SUB SEinit
   MODE 1,8
   CLS RGB(NOTBLACK) 
   LOAD PNG "Logo.PNG", 584, 0
+  'LOAD PNG "Mouse1.PNG", 640, 50
   LOAD FONT "SimplEd.FNT"
   FONT #8
   TEXT WW.SE + MAXW.SE + 16, MAXH.SE - 8, SEdigital(VERSION.SE), "LT",,,RGB(RED), RGB(NOTBLACK)
@@ -605,13 +620,14 @@ END SUB
 SUB SEdrawCharS(ch AS INTEGER, dx AS INTEGER, dy AS INTEGER, col AS INTEGER)
   'draw SMALL (edited) character
 
-  LOCAL INTEGER x, y
+  LOCAL INTEGER x, y, r
 
   IF dx => 0 AND dx < MM.HRES THEN
     IF col = 0 THEN col = RGB(WHITE)
     FOR y = 0 TO H.SE - 1
+      r = CHAR.SE(ch - MINC.SE, y)
       FOR x = 0 TO W.SE - 1
-        IF CHAR.SE(ch - MINC.SE, y) AND (1<<(W.SE-x-1)) THEN
+        IF r AND (1<<(W.SE - x - 1)) THEN
           PIXEL dx + x, dy + y, col
         ENDIF
       NEXT x
@@ -645,7 +661,7 @@ SUB SEdrawCharB
   NEXT y
   PAGE WRITE 0
   BLIT 0, 0, 0, 0, WW.SE, WW.SE, 1
-  LOCAL STRING txt = "CHR$(" + STR$(ASC.SE, 3) + ") = " +CHR$(34)+ CHR$(ASC.SE) + CHR$(34)
+  LOCAL STRING txt = "CHR$(" + STR$(ASC.SE, 3) + ") = " + CHR$(ASC.SE)
   TEXT WW.SE - 8 * LEN(txt), WW.SE, txt, "LT",,,RGB(WHITE), RGB(NOTBLACK)
   IF ASC.SE = BEGIN.SE THEN
     IF BEGIN.SE = END.SE THEN
@@ -1881,10 +1897,8 @@ SUB SEpixel(setCol AS INTEGER)
 
   LOCAL INTEGER hlp = (1 << (W.SE - CX.SE - 1)), nhlp = INV hlp
  
-  IF MOU.SE THEN GUI CURSOR HIDE
+  IF MOU.SE > -1 THEN GUI CURSOR HIDE
   SEcursorB(0)
-  'CHAR.SE(ASC.SE - MINC.SE, CY.SE) = CHAR.SE(ASC.SE - MINC.SE, CY.SE) XOR hlp
-  'IF (c = 0 AND CHAR.SE(ASC.SE - MINC.SE, CY.SE) AND hlp) OR  c = 1 THEN
   IF ((CHAR.SE(ASC.SE - MINC.SE, CY.SE) AND hlp) = 0) AND (setCol >= 0) THEN
     CHAR.SE(ASC.SE - MINC.SE, CY.SE) = CHAR.SE(ASC.SE - MINC.SE, CY.SE) OR hlp
     SEincRC(ROW.SE, CY.SE + 1)
@@ -1892,16 +1906,12 @@ SUB SEpixel(setCol AS INTEGER)
     BOX DX.SE + CX.SE * PIX.SE, DY.SE + CY.SE * PIX.SE, PIX.SE, PIX.SE, 1, RGB(GRAY), RGB(WHITE)
   ELSEIF ((CHAR.SE(ASC.SE - MINC.SE, CY.SE) AND hlp) > 0) AND (setCol <= 0) THEN
     CHAR.SE(ASC.SE - MINC.SE, CY.SE) = CHAR.SE(ASC.SE - MINC.SE, CY.SE) AND nhlp
-    'IF CHAR.SE(ASC.SE - MINC.SE, CY.SE) AND hlp THEN
-    '  CHAR.SE(ASC.SE - MINC.SE, CY.SE) = CHAR.SE(ASC.SE - MINC.SE, CY.SE) XOR hlp
-    'ENDIF
     SEdecRC(ROW.SE, CY.SE + 1)
     SEdecRC(COL.SE, CX.SE + 1)
     BOX DX.SE + CX.SE * PIX.SE, DY.SE + CY.SE * PIX.SE, PIX.SE, PIX.SE, 1, RGB(GRAY), RGB(NOTBLACK)
   ENDIF
   SEcursorS(1)     
   SEcursorB(1)
-  IF MOU.SE THEN GUI CURSOR SHOW
+  IF MOU.SE > -1 THEN GUI CURSOR SHOW
 END SUB
-
 
