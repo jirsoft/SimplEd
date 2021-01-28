@@ -1,7 +1,7 @@
 # SimplEd
 Simple font editor for CMM2 with basic mouse support.
 
-#### v0.31
+#### v0.33
 	mouse support improvements (auto search for correct port, release on ond...)
 	bugfix of the bottom row of characters
 	included actual copy of TUI.INC
