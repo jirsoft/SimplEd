@@ -10,7 +10,7 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.32"
+CONST VERSION.SE = "0.33"
 
 CONST ZERO.SE = CHR$(0)
 DIM STRING CWD.SE = MM.INFO$(PATH)
@@ -18,8 +18,8 @@ CHDIR CWD.SE
 DIM STRING LAST.SE = "NewFont", EXPORT.SE = CWD.SE + "SE_EXPORTED"
 DIM INTEGER T_TIME.SE = 0, C_TIME.SE = 0
 
-'#INCLUDE "TUI.INC"
-#INCLUDE "../LIB/TUI.INC"
+#INCLUDE "TUI.INC"
+'#INCLUDE "../LIB/TUI.INC"
 
 CONST NAME_CHARS.SE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#%^&*-+()[]"
 
@@ -52,8 +52,8 @@ DIM STRING MACRO.SE = ""
 DIM STRING MACRO_NAME.SE(20)
 DIM STRING MACRO_CALL.SE(20)
 
-DIM INTEGER MOU.SE = -1, MOU_X.SE = -1, MOU_Y.SE = -1, MOU_L.SE = -1, MOU_R.SE = -1, MOU_W.SE = -1
-
+DIM INTEGER MOU.SE = -1, MOU_X.SE = -1, MOU_Y.SE = -1, MOU_L.SE = -1, MOU_R.SE = -1, MOU_W.SE = -1, MOU_SET.SE = 0
+DIM STRING MOU_INF.SE = CWD.SE + "MOUSE.INF"
 SEinit
 SEinitMouse
 
@@ -86,7 +86,7 @@ SUB SEinitMouse
   ELSE
     MOU.SE = -1
   ENDIF 
-  FOR i = 1 TO 3
+  FOR i = 0 TO 3
     IF MOU.SE < 0 THEN
       ON ERROR SKIP
       CONTROLLER MOUSE OPEN i
@@ -95,11 +95,22 @@ SUB SEinitMouse
       ENDIF
     ENDIF
     IF MOU.SE >= 0 THEN
-      IF TUIquestion("MOUSE TEST", "Mouse found on port " + STR$(MOU.SE) + ", use it?") THEN
+      IF MOU_SET.SE THEN
         LOAD PNG "Mouse.PNG", 640, 50
         GUI CURSOR ON 0, MOUSE(X, MOU.SE), MOUSE(Y, MOU.SE), RGB(GREEN)
+        
+      ELSEIF TUIquestion("MOUSE TEST", "Mouse found on port " + STR$(MOU.SE) + ", use it?") THEN
+        LOAD PNG "Mouse.PNG", 640, 50
+        GUI CURSOR ON 0, MOUSE(X, MOU.SE), MOUSE(Y, MOU.SE), RGB(GREEN)
+        ON ERROR SKIP
+        OPEN MOU_INF.SE FOR OUTPUT AS #1
+        IF MM.ERRNO = 0 THEN
+          CLOSE #1
+        ENDIF
+
       ELSE
         MOU.SE = -1
+
       ENDIF
       EXIT SUB
     ENDIF
@@ -542,11 +553,12 @@ SUB SEinit
 
   LOCAL INTEGER i
 
+  MOU_SET.SE = (MM.INFO(FILESIZE MOU_INF.SE) >= 0)
+
   MODE 1,8
   CLS RGB(NOTBLACK) 
-  LOAD PNG "Logo.PNG", 584, 0
-  'LOAD PNG "Mouse1.PNG", 640, 50
-  LOAD FONT "SimplEd.FNT"
+  LOAD PNG CWD.SE + "Logo.PNG", 584, 0
+  LOAD FONT CWD.SE + "SimplEd.FNT"
   FONT #8
   TEXT WW.SE + MAXW.SE + 16, MAXH.SE - 8, SEdigital(VERSION.SE), "LT",,,RGB(RED), RGB(NOTBLACK)
 
