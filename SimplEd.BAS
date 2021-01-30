@@ -134,8 +134,8 @@ END SUB
 SUB SEtestMouse
   'testing mouse for movement and buttons
 
-  LOCAL INTEGER x = MOUSE(X. MOU.SE), y = MOUSE(Y. MOU.SE)
-  LOCAL INTEGER l = MOUSE(L. MOU.SE), r = MOUSE(R. MOU.SE), w = MOUSE(W. MOU.SE)
+  LOCAL INTEGER x = MOUSE(X, MOU.SE), y = MOUSE(Y, MOU.SE)
+  LOCAL INTEGER l = MOUSE(L, MOU.SE), r = MOUSE(R, MOU.SE), w = MOUSE(W, MOU.SE)
   LOCAL INTEGER cxl = WW.SE + 4, cyu = 16, pxy = MIN(MAXW.SE \ W.SE, MAXH.SE \ H.SE), change = 0
   INC cxl, (MAXW.SE - pxy * W.SE) \ 2  
   INC cyu, (MAXH.SE - pxy * H.SE) \ 2  
