@@ -1,6 +1,10 @@
 # SimplEd
 Simple font editor for CMM2 with basic mouse support.
 
+#### v0.35
+	CTRL-S will SWPA between current character and CLIP
+	WIN+I can import also images - will be scanned into font
+
 #### v0.33
 	mouse support improvements (auto search for correct port, release on ond...)
 	bugfix of the bottom row of characters
