@@ -5,12 +5,16 @@
 OPTION DEFAULT NONE
 OPTION EXPLICIT
 OPTION BASE 0
+OPTION CRLF LF
 
 OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.33"
+CONST VERSION.SE = "0.35"
+
+
+CONST MIN_GRF.SE = "0.11"
 
 CONST ZERO.SE = CHR$(0)
 DIM STRING CWD.SE = MM.INFO$(PATH)
@@ -18,8 +22,10 @@ CHDIR CWD.SE
 DIM STRING LAST.SE = "NewFont", EXPORT.SE = CWD.SE + "SE_EXPORTED"
 DIM INTEGER T_TIME.SE = 0, C_TIME.SE = 0
 
-#INCLUDE "TUI.INC"
-'#INCLUDE "../LIB/TUI.INC"
+'#INCLUDE "TUI.INC"
+'#INCLUDE "GRF.INC"
+#INCLUDE "../LIB/TUI.INC"
+#INCLUDE "../LIB/GRF.INC"
 
 CONST NAME_CHARS.SE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#%^&*-+()[]"
 
@@ -277,6 +283,9 @@ SUB SEkey(kk AS STRING)
   '''TEXT MM.HRES, 0, STR$(k),"RT",,,RGB(WHITE),RGB(NOTBLACK)'''
 
   SELECT CASE k
+    CASE 3000 + ASC("0")
+      SEminimalSize
+
     CASE 3000 + ASC("q"), 3000 + ASC("Q")
       IF TUIquestion("QUIT", "Are you ready to leave me alone?") THEN
         CLS
@@ -500,6 +509,13 @@ SUB SEkey(kk AS STRING)
       SEtoClipboard
       SEshowClipboard
 
+    CASE 4019 'CTRL-S, swap character and clipboard
+      SEswapClipboard
+      SEshowClipboard
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
     CASE 4022 'CTRL-V, paste clipboard to character
       SEprepareUndo
       SEmacroAdd(14)
@@ -557,10 +573,19 @@ SUB SEinit
 
   MODE 1,8
   CLS RGB(NOTBLACK) 
-  LOAD PNG CWD.SE + "Logo.PNG", 584, 0
+  LOAD PNG CWD.SE + "Logo.PNG", 584, 0, 2
   LOAD FONT CWD.SE + "SimplEd.FNT"
   FONT #8
   TEXT WW.SE + MAXW.SE + 16, MAXH.SE - 8, SEdigital(VERSION.SE), "LT",,,RGB(RED), RGB(NOTBLACK)
+
+  IF VAL(VERSION.GRF) < VAL(MIN_GRF.SE) THEN
+    TUIwarning("GRF.INC VERSION TOO OLD", "GRF.INC v" + MIN_GRF.SE + " or newer needed, you have v" + VERSION.GRF)
+    CLS
+    CHDIR TUIgetParent(EXPORT.SE)
+    OPTION BREAK 3
+    IF MOU.SE > -1 THEN CONTROLLER MOUSE CLOSE MOU.SE
+    END
+  ENDIF
 
   RESTORE macro_def
   FOR i = 0 TO BOUND(MACRO_NAME.SE())
@@ -971,7 +996,19 @@ SUB SEtoClipboard
   LOCAL INTEGER i
 
   FOR i = 0 TO H.SE - 1
-     CLIP.SE(i) = CHAR.SE(ASC.SE - MINC.SE, i)
+    CLIP.SE(i) = CHAR.SE(ASC.SE - MINC.SE, i)
+  NEXT i
+END SUB
+
+SUB SEswapClipboard
+  'swap char and CLIP
+
+  LOCAL INTEGER i, hh
+
+  FOR i = 0 TO H.SE - 1
+    hh = CLIP.SE(i)
+    CLIP.SE(i) = CHAR.SE(ASC.SE - MINC.SE, i)
+    CHAR.SE(ASC.SE - MINC.SE, i) = hh
   NEXT i
 END SUB
 
@@ -1236,6 +1273,7 @@ SUB SEexport
       ENDIF
     ENDIF
 
+    LOCAL STRING dialog = TUIwaitingON("EXPORT FONT")
     OPEN EXPORT.SE + "/" + fname FOR OUTPUT AS #1
           
     ?#1,"DefineFont #8"
@@ -1246,6 +1284,7 @@ SUB SEexport
     octaCount = 0
     hexDigits = CINT(W.SE / 4 + 0.49)
     FOR i = BEGIN.SE TO END.SE
+      TUIwaitingProgress(dialog, 100*i/(END.SE - BEGIN.SE + 1))
       act = i - MINC.SE
       FOR j = 0 TO H.SE - 1
 
@@ -1282,14 +1321,15 @@ SUB SEexport
 
     ?#1,"END DefineFont"
     CLOSE #1
-    TUIwarning("EXPORT FONT", "File '" + EXPORT.SE + "/" + fname + "' saved")
+    TUIwaitingOFF(dialog)
+    'TUIwarning("EXPORT FONT", "File '" + EXPORT.SE + "/" + fname + "' saved")
   ENDIF
 END SUB
 
 SUB SEimport
   'import FONT file (from .FNT, .BAS or .INC)
 
-  LOCAL STRING fileName, ext = ".FNT,.BAS,.INC"
+  LOCAL STRING fileName, ext = ".FNT,.BAS,.INC,.PNG,.BMP,.GIF,.JPG"
 
   fileName = TUIfileSelect(CWD.SE, ext)  
   IF fileName <> "" THEN
@@ -1300,7 +1340,19 @@ SUB SEimport
       LOOP
       LAST.SE = LEFT$(LAST.SE, LEN(LAST.SE) - 1)
     ENDIF
-    SEimportFont(fileName)
+    IF INSTR(".BMP.PNG.JPG.GIF", UCASE$(RIGHT$(fileName, 4))) > 0 THEN
+      SEimageScan(fileName)
+    ELSE
+      SEimportFont(fileName)
+    ENDIF
+    ASC.SE = BEGIN.SE
+    CMIN.SE = BEGIN.SE
+    CMAX.SE = MM.HRES \ W.SE + CMIN.SE - 1 
+    SEdrawCharSet
+    SEdrawCharB
+    SEcursorS(1)   
+    SEcursorB(1)
+    SEshowClipboard
   ENDIF
 END SUB
 
@@ -1317,7 +1369,8 @@ SUB SEimportFont(f AS STRING)
   'load imported FONT
 
   LOCAL STRING lin, dword, row
-  LOCAL INTEGER m = 0, first, cnt, hexDigits, y
+  LOCAL INTEGER m = 0, first, cnt, hexDigits, y, size, pnt = 1
+  LOCAL STRING dialog = TUIwaitingON("IMPORT FONT")
 
   FOR first = MINC.SE TO MAXc.SE
     FOR cnt = 0 TO MAXH.SE - 1
@@ -1325,8 +1378,11 @@ SUB SEimportFont(f AS STRING)
     NEXT cnt
   NEXT first
   OPEN f FOR INPUT AS #1
+  size = LOF(#1)
   DO WHILE NOT EOF(#1)
     LINE INPUT #1, lin
+    INC pnt, LEN(lin)
+    TUIwaitingProgress(dialog, 100*pnt/size)
     lin = SElTrim(lin)
     IF lin <> "" THEN
       IF LEFT$(lin, 1) <> "'" THEN
@@ -1383,6 +1439,7 @@ SUB SEimportFont(f AS STRING)
     ENDIF
   LOOP
   CLOSE #1
+  TUIwaitingOFF(dialog)
   CW.SE = W.SE * (MM.HRES \ W.SE)
   CD.SE = (MM.HRES - CW.SE) \ 2
   CMIN.SE = MINC.SE
@@ -1391,6 +1448,8 @@ SUB SEimportFont(f AS STRING)
   DX.SE = (WW.SE - PIX.SE * W.SE) \ 2
   DY.SE = (WW.SE - PIX.SE * H.SE) \ 2
 
+  CX.SE = 0
+  CY.SE = 0
   SEdrawCharSet
   ASC.SE = MINC.SE
   SEdrawCharB
@@ -1643,19 +1702,21 @@ END SUB
 SUB SEhelp
   'print HELP
 
-  LOCAL INTEGER dx = WW.SE + 8, dy = MAXH.SE + 16 + 8
+  LOCAL INTEGER dx = WW.SE + 8, dy = MAXH.SE + 16 + 4
   TEXT dx, dy, CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"  EDITOR cursor (SHIFT fast)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "SPACE  INVERT pixel", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "LRTBC  LEFT/RIGHT/TOP/BOTTOM/CENTER", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 24  
+  INC dy, 20  
   TEXT dx, dy, "CTRL-C/V  COPY/PASTE to/from CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  INC dy, 16  
+  TEXT dx, dy, "CTRL-S    SWAP char and CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "CTRL-O    OR from CLIP (COMBINE)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "CTRL-Z    UNDO/REDO last change", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 24  
+  INC dy, 20  
   TEXT dx, dy, "Alt " + CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"  SHIFT character", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "Alt H/V      MIRROR horiz/vert", "LT",,,RGB(CYAN), RGB(NOTBLACK)
@@ -1669,7 +1730,7 @@ SUB SEhelp
   TEXT dx, dy, "Alt N        ROTATE char 90" + CHR$(216), "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "Alt S        SPECIAL functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 24  
+  INC dy, 20  
   TEXT dx, dy, CHR$(213)+" "+CHR$(228)+" "+CHR$(227)+"  Choose char to EDIT", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" F/L  MARK FIRST/LAST char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
@@ -1682,14 +1743,14 @@ SUB SEhelp
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" D    Choose default font", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" I    Import FNT, BAS or INC file", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  TEXT dx, dy, CHR$(213)+" I    Import FNT,BAS,INC or IMAGE", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" E    Export FNT, FIRST to LAST", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" M    MACRO functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 24  
+  INC dy, 20  
   TEXT dx, dy, "PrtScr Screenshot to 'SSxxx.BMP'", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 24
+  INC dy, 20
   TEXT dx, dy, CHR$(213)+" Q    QUIT SimplEd", "LT",,,RGB(CYAN), RGB(NOTBLACK)
 END SUB
 
@@ -1927,3 +1988,296 @@ SUB SEpixel(setCol AS INTEGER)
   IF MOU.SE > -1 THEN GUI CURSOR SHOW
 END SUB
 
+SUB SEimageScan(filePath AS STRING)
+
+  IF filePath = "" THEN filePath = "/IMAGES/ScreenShots/Font1.png"
+
+  LOCAL STRING info = GRF.getImgInfo(filePath)
+  IF info <> "" THEN
+    LOCAL INTEGER w = VAL(FIELD$(info, 1, ",")), h = VAL(FIELD$(info, 2, ",")), x, y
+    IF w <= MM.HRES AND h <= MM.VRES THEN  
+      PAGE WRITE 1
+      CLS RGB(NOTBLACK)
+      PAGE WRITE 0
+      IF GRF.loadImg(filePath, 0, 0, 1, 1) THEN
+        PAGE COPY 0 TO 2 'save current page
+        PAGE WRITE 1
+        LOCAL INTEGER bc = GRF.getLuma(0, 0, 1), luma, fc = 0
+
+        PAGE WRITE 0
+        LOCAL STRING dialog = TUIwaitingON("IMAGE SCANNER - B/W CONVERSION")
+        PAGE WRITE 1
+
+        FOR y = 0 TO h - 1
+          PAGE WRITE 0
+          TUIwaitingProgress(dialog, 100 * y / h)
+          PAGE WRITE 1
+          FOR x = 0 TO w - 1
+            luma = GRF.getLuma(x, y, 1)
+            IF bc < 128 THEN 'font on dark ?
+              IF luma > bc THEN
+                PIXEL x, y, RGB(WHITE)
+              ELSE
+                PIXEL x, y, RGB(NOTBLACK)
+              ENDIF            
+
+            ELSE 'font on light ?
+              IF luma < bc THEN
+                PIXEL x, y, RGB(NOTBLACK)
+              ELSE
+                PIXEL x, y, RGB(WHITE)
+              ENDIF            
+            ENDIF
+          NEXT x
+        NEXT y
+        
+        IF bc < 128 THEN
+          bc = 0 
+          fc = 255
+        ELSE 
+          bc = 255
+          fc = 0
+        ENDIF
+        PAGE WRITE 0
+        TUIwaitingOFF(dialog)
+        PAGE COPY 1 TO 0 'show B/W image
+       
+        LOCAL INTEGER nx = VAL(TUIinput("IMAGE SCANNER", "Characters in row:", "", "0123456789"))
+        IF nx > 0 AND nx < w THEN
+         LOCAL INTEGER ny = VAL(TUIinput("IMAGE SCANNER", "Rows count:", "", "0123456789"))
+          IF ny > 0 AND ny < w THEN
+            LOCAL INTEGER dx = MIN(MAXW.SE, w \ nx), dy = MIN(MAXH.SE, h \ ny), xx = 0, yy = 0, hlp = 1
+            LOCAL STRING k = ""
+            
+            LOCAL STRING inf(7)
+            inf(0) = "You should adjust red grid to every character"
+            inf(1) = "KEYS:"
+            inf(2) = "l/r/t/b   move grid left, right, top or bottom (offset)"
+            inf(3) = "w/n/h/s   make characters wider, narrower, higher or smaller"
+            inf(4) = "x/X/y/Y   more/less character in row/column (extend/reduce grid)"
+            inf(5) = "?         this HELP"
+            inf(6) = "ENTER     PROCEED to next step"
+            inf(7) = "ESC       CANCEL and exit"
+            DO 
+              PAGE COPY 1 TO 0 'show B/W image
+              FOR x = 0 TO nx
+                LINE xx + x*dx, yy, xx + x*dx, yy + ny*dy, 1, RGB(RED)
+              NEXT x
+              FOR y = 0 TO ny
+                LINE xx, yy + y*dy, xx + nx*dx, yy + y*dy, 1, RGB(RED)
+              NEXT y
+
+              TEXT MM.HRES, 0, "S"+STR$(dx)+"*"+STR$(dy), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 16, "C"+STR$(nx)+"*"+STR$(ny), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 32, "L"+STR$(xx), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 48, "T"+STR$(xx), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              IF hlp THEN
+                TUIinfo("SET CHARACTER SIZE", inf())
+                hlp = 0
+              ENDIF
+              DO WHILE k = ""
+                k = INKEY$
+              LOOP
+              SELECT CASE k
+                CASE "r"
+                  IF xx + nx*dx < w THEN INC xx
+
+                CASE "l"
+                  IF xx > 0 THEN INC xx, -1
+
+                CASE "b"
+                  IF yy + ny*dy < h  THEN INC yy
+
+                CASE "t"
+                  IF yy > 0 THEN INC yy, -1
+
+                CASE "w"
+                  IF dx < MAXW.SE AND xx + nx*dx < w THEN INC dx
+
+                CASE "n"
+                  IF dx > MINW.SE THEN INC dx, -1
+
+                CASE "h"
+                  IF dy < MAXH.SE AND yy + ny*dy < h THEN INC dy
+
+                CASE "s"
+                  IF dy > MINH.SE THEN INC dy, -1
+
+                CASE "y"
+                  IF (ny + 1)*dy + yy < h THEN INC ny
+                  dy = MIN(MAXW.SE, h \ ny)
+
+                CASE "Y"
+                  IF ny > 1 THEN INC ny, -1
+                  dy = MIN(MAXW.SE, h \ ny)
+
+                CASE "x"
+                  IF (nx + 1)*dx + xx < w THEN INC nx
+                  dx = MIN(MAXW.SE, w \ nx)
+
+                CASE "X"
+                  IF nx > 1 THEN INC nx, -1
+                  dx = MIN(MAXW.SE, w \ nx)
+                
+                'CASE "i"
+                '  bc = 255 - bc
+                '  fc = 255 - fc
+
+                CASE "?"
+                  TUIinfo("SET CHARACTER SIZE", inf())
+
+                CASE CHR$(10) 'proceed
+                  EXIT DO 
+
+                CASE CHR$(27)
+                  PAGE COPY 2 TO 0 'exit
+                  PAGE WRITE 0
+                  EXIT SUB
+                  
+              END SELECT
+              k = ""  
+            LOOP
+
+            LOCAL INTEGER px, py
+            LOCAL STRING enabled = "abcdefghijklmnopqrstuvwxyz", mapping = ""
+            CAT enabled,           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            CAT enabled,           " 0123456789,.+-*/!@#$%^&()_={[}]:;<>?\|'" + CHR$(34)
+            'selection made
+            inf(0) = "Now is needed to map every symbol to proper character, so enter"
+            inf(1) = "for every symbol keyboard char it should be mapped to."
+            inf(2) = "For example press 'A' for symbol that looks like 'A'."
+            inf(3) = "Process is case sensitive, so 'a' and 'A' are different!"
+            inf(4) = "If you map less than complete set, not mapped symbols will follow."
+            inf(5) = "Enabled keys " + LEFT$(enabled, 46)
+            inf(6) = "             " + MID$(enabled, 47)
+            inf(7) = "BACKSPACE remove last, ENTER finish the process, ESC to cancel"
+            TUIinfo("SET CHRACTER MAP",  inf())
+
+            k = ""
+            x = 0
+            y = 0           
+            TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+            DO
+              DO WHILE k = ""
+                k = INKEY$
+              LOOP
+              IF INSTR(enabled, k) > 0 THEN
+                px = x: py = y
+                TEXT x + xx, y + yy, k, "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                INC x, dx
+                IF x >= nx*dx THEN
+                  x = 0
+                  IF y + dy < ny*dy THEN
+                    INC y, dy
+                  ENDIF
+                ENDIF 
+                IF x <> px OR y <> py THEN
+                  TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                  px = x: py = y
+                ENDIF
+                IF LEN(mapping) < 128 THEN CAT mapping, k
+
+              ELSE IF k = CHR$(27) THEN
+                PAGE COPY 2 TO 0 'exit
+                PAGE WRITE 0
+                EXIT SUB
+
+              ELSEIF k = CHR$(8) THEN
+                IF LEN(mapping) > 0 THEN
+                  mapping = LEFT$(mapping, LEN(mapping) - 1)
+                  px = x: py = y
+                  IF x > 0 THEN
+                    INC x, -dx
+                  ELSE
+                    IF y > 0 THEN
+                      x = (nx - 1) * dx
+                      INC y, -dy
+                    ENDIF
+                  ENDIF
+                  IF x <> px OR y <> py THEN
+                    TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                    px = x: py = y
+                  ENDIF
+                ENDIF
+
+              ELSEIF k = CHR$(10) THEN
+                EXIT DO
+              ENDIF
+              k = ""
+            LOOP
+
+      
+            PAGE WRITE 0
+            CLS RGB(NOTBLACK)
+            PAGE COPY 2 TO 0 'show SE image
+
+            END.SE = nx * ny + MINC.SE - 1
+            H.SE = dy
+            W.SE = dx
+            IF W.SE MOD 4 <> 0 THEN INC W.SE, 4 - (W.SE MOD 4) 'width should be multiply of 4 
+            CW.SE = W.SE * (MM.HRES \ W.SE)
+            CD.SE = (MM.HRES - CW.SE) \ 2
+            CMIN.SE = MINC.SE
+            CMAX.SE = MM.HRES \ W.SE + CMIN.SE - 1   
+            PIX.SE = MIN(WW.SE \ W.SE, WW.SE \ H.SE)  
+            DX.SE = (WW.SE - PIX.SE * W.SE) \ 2
+            DY.SE = (WW.SE - PIX.SE * H.SE) \ 2
+            BEGIN.SE = MINC.SE
+            dialog = TUIwaitingON("IMAGE SCANNER - CREATE FONT")
+            FOR x = MINC.SE TO MAXC.SE
+              FOR y = 0 TO MAXH.SE - 1
+                CHAR.SE(x - MINC.SE, y) = 0
+              NEXT y
+            NEXT x
+            LOCAL INTEGER i, rx = xx, ry = yy
+
+            ASC.SE = MINC.SE
+            px = ASC.SE: py = MAXC.SE
+            FOR i = MINC.SE TO END.SE
+              TUIwaitingProgress(dialog, 100 * (i - MINC.SE) / (END.SE - MINC.SE))
+              IF LEN(mapping) > 0 THEN
+                ASC.SE = ASC(LEFT$(mapping, 1))
+                mapping = MID$(mapping, 2)
+              ELSE
+                IF ASC.SE < MAXC.SE THEN INC ASC.SE
+              ENDIF
+              px = MAX(px, ASC.SE)
+              py = MIN(py, ASC.SE)
+              FOR y = 0 TO H.SE - 1
+                CHAR.SE(ASC.SE - MINC.SE, y) = 0
+                FOR x = 0 TO dx - 1
+                  IF x < W.SE THEN
+                    IF (GRF.getLuma(rx+x, ry+y, 1)>128 AND fc) OR (GRF.getLuma(rx+x, ry+y, 1)<128 AND bc) THEN
+                      CHAR.SE(ASC.SE - MINC.SE, y) = CHAR.SE(ASC.SE - MINC.SE, y) OR (1 << (W.SE - x - 1))
+                    ENDIF
+                  ENDIF
+                NEXT x
+              NEXT y
+              INC rx, dx
+              IF (rx - xx) / dx >= nx THEN
+                rx = xx
+                INC ry, dy
+              ENDIF
+            NEXT i   
+
+            END.SE = px
+            BEGIN.SE = py            
+            TUIwaitingOFF(dialog)
+          ENDIF
+        ENDIF
+        PAGE WRITE 0
+      ELSE
+
+        TUIwarning("IMAGE SCANNER", "Loading error")
+      ENDIF
+    ENDIF
+  ELSE
+    TUIwarning("IMAGE SCANNER", "This image can't be scanned")
+  ENDIF
+END SUB
+
+SUB SEminimalSize
+  IF TUIquestion("FIND FONT MINIMAL SIZE", "Font width and height could be reduced, proceed?") THEN
+    
+  ENDIF
+END SUB
