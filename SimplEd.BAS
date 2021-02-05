@@ -11,7 +11,7 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.35"
+CONST VERSION.SE = "0.38"
 
 
 CONST MIN_GRF.SE = "0.11"
@@ -22,10 +22,10 @@ CHDIR CWD.SE
 DIM STRING LAST.SE = "NewFont", EXPORT.SE = CWD.SE + "SE_EXPORTED"
 DIM INTEGER T_TIME.SE = 0, C_TIME.SE = 0
 
-#INCLUDE "TUI.INC"
-#INCLUDE "GRF.INC"
-'#INCLUDE "../LIB/TUI.INC"
-'#INCLUDE "../LIB/GRF.INC"
+'#INCLUDE "TUI.INC"
+'#INCLUDE "GRF.INC"
+#INCLUDE "../LIB/TUI.INC"
+#INCLUDE "../LIB/GRF.INC"
 
 CONST NAME_CHARS.SE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#%^&*-+()[]"
 
@@ -267,6 +267,14 @@ FUNCTION SErc(s AS STRING) AS STRING
   NEXT i  
 END FUNCTION
 
+SUB SEquit
+  CLS
+  CHDIR TUIgetParent(EXPORT.SE)
+  OPTION BREAK 3
+  IF MOU.SE > -1 THEN CONTROLLER MOUSE CLOSE MOU.SE
+  END
+END SUB
+
 SUB SEkey(kk AS STRING)
   'main key seting method
 
@@ -287,13 +295,7 @@ SUB SEkey(kk AS STRING)
       SEminimalSize
 
     CASE 3000 + ASC("q"), 3000 + ASC("Q")
-      IF TUIquestion("QUIT", "Are you ready to leave me alone?") THEN
-        CLS
-        CHDIR TUIgetParent(EXPORT.SE)
-        OPTION BREAK 3
-        IF MOU.SE > -1 THEN CONTROLLER MOUSE CLOSE MOU.SE
-        END
-      ENDIF
+      IF TUIquestion("QUIT", "Are you ready to leave me alone?") THEN SEquit
 
     CASE 3000 + ASC("p"), 3000 + ASC("P") 'preview
       SEpreviewFont
@@ -571,7 +573,7 @@ SUB SEinit
 
   MOU_SET.SE = (MM.INFO(FILESIZE MOU_INF.SE) >= 0)
 
-  MODE 1,8
+  MODE 1
   CLS RGB(NOTBLACK) 
   LOAD PNG CWD.SE + "Logo.PNG", 584, 0, 2
   LOAD FONT CWD.SE + "SimplEd.FNT"
@@ -580,11 +582,7 @@ SUB SEinit
 
   IF VAL(VERSION.GRF) < VAL(MIN_GRF.SE) THEN
     TUIwarning("GRF.INC VERSION TOO OLD", "GRF.INC v" + MIN_GRF.SE + " or newer needed, you have v" + VERSION.GRF)
-    CLS
-    CHDIR TUIgetParent(EXPORT.SE)
-    OPTION BREAK 3
-    IF MOU.SE > -1 THEN CONTROLLER MOUSE CLOSE MOU.SE
-    END
+    SEquit
   ENDIF
 
   RESTORE macro_def
@@ -801,7 +799,6 @@ SUB SEdecRC(s AS STRING, i AS INTEGER)
 
   ON ERROR SKIP
   MID$(s, i, 1) = CHR$(ASC(MID$(s, i, 1)) - 1)
-  IF MM.ERRNO THEN MMDEBUG BREAK
 END SUB
 
 SUB SEsetLimits
@@ -1735,6 +1732,8 @@ SUB SEhelp
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" F/L  MARK FIRST/LAST char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
+  TEXT dx, dy, CHR$(213)+" 0    Find font's minimal SIZE", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  INC dy, 16  
   TEXT dx, dy, CHR$(213)+" +/-  Make font BIGGER/SMALLER", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" H/W  Set font HEIGHT/WIDTH", "LT",,,RGB(CYAN), RGB(NOTBLACK)
@@ -1946,7 +1945,7 @@ SUB SEmacroPlay(f AS INTEGER, l AS INTEGER)
 
     IF f <> l THEN dialog = TUIwaitingON("MACRO PLAY")
     FOR j = f TO l
-      IF f <> l THEN TUIwaitingProgress(dialog, 100*(ASC.SE - f)/(l - f))
+      IF f <> l THEN TUIwaitingProgress(dialog, 100*(j - f)/(l - f))
       ASC.SE = j
       SEcursorS(1)
       FOR i = 1 TO LEN(MACRO.SE)
@@ -1989,8 +1988,7 @@ SUB SEpixel(setCol AS INTEGER)
 END SUB
 
 SUB SEimageScan(filePath AS STRING)
-
-  IF filePath = "" THEN filePath = "/IMAGES/ScreenShots/Font1.png"
+  'scan image in filePath for characters
 
   LOCAL STRING info = GRF.getImgInfo(filePath)
   IF info <> "" THEN
@@ -2046,15 +2044,15 @@ SUB SEimageScan(filePath AS STRING)
         IF nx > 0 AND nx < w THEN
          LOCAL INTEGER ny = VAL(TUIinput("IMAGE SCANNER", "Rows count:", "", "0123456789"))
           IF ny > 0 AND ny < w THEN
-            LOCAL INTEGER dx = MIN(MAXW.SE, w \ nx), dy = MIN(MAXH.SE, h \ ny), xx = 0, yy = 0, hlp = 1
+            LOCAL INTEGER dx = MIN(MAXW.SE, w \ nx), dy = MIN(MAXH.SE, h \ ny), xx = 0, yy = 0, hlp = 1, alt, m
             LOCAL STRING k = ""
             
             LOCAL STRING inf(7)
             inf(0) = "You should adjust red grid to every character"
             inf(1) = "KEYS:"
-            inf(2) = "l/r/t/b   move grid left, right, top or bottom (offset)"
-            inf(3) = "w/n/h/s   make characters wider, narrower, higher or smaller"
-            inf(4) = "x/X/y/Y   more/less character in row/column (extend/reduce grid)"
+            inf(2) = "CRSR      move grid left, right, top or bottom (offset)"
+            inf(3) = "ALT+CRSR  make characters wider, narrower, higher or smaller"
+            inf(4) = "r/R/c/C   more/less character in row/column (extend/reduce grid)"
             inf(5) = "?         this HELP"
             inf(6) = "ENTER     PROCEED to next step"
             inf(7) = "ESC       CANCEL and exit"
@@ -2067,10 +2065,10 @@ SUB SEimageScan(filePath AS STRING)
                 LINE xx, yy + y*dy, xx + nx*dx, yy + y*dy, 1, RGB(RED)
               NEXT y
 
-              TEXT MM.HRES, 0, "S"+STR$(dx)+"*"+STR$(dy), "RT",8,,RGB(RED),RGB(NOTBLACK)
-              TEXT MM.HRES, 16, "C"+STR$(nx)+"*"+STR$(ny), "RT",8,,RGB(RED),RGB(NOTBLACK)
-              TEXT MM.HRES, 32, "L"+STR$(xx), "RT",8,,RGB(RED),RGB(NOTBLACK)
-              TEXT MM.HRES, 48, "T"+STR$(xx), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 0, STR$(dx)+"x"+STR$(dy), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 16, "R"+STR$(ny)+"x C"+STR$(nx), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 32, "X"+STR$(xx), "RT",8,,RGB(RED),RGB(NOTBLACK)
+              TEXT MM.HRES, 48, "Y"+STR$(yy), "RT",8,,RGB(RED),RGB(NOTBLACK)
               IF hlp THEN
                 TUIinfo("SET CHARACTER SIZE", inf())
                 hlp = 0
@@ -2078,46 +2076,58 @@ SUB SEimageScan(filePath AS STRING)
               DO WHILE k = ""
                 k = INKEY$
               LOOP
+              
+              m = KEYDOWN(7)
+              IF (m AND 1) OR (m AND 16) THEN 
+                alt = 1
+              ELSE
+                alt = 0
+              ENDIF
+
               SELECT CASE k
+                CASE CHR$(131) 'RIGHT
+                  IF alt THEN
+                    IF dx < MAXW.SE AND xx + nx*dx < w THEN INC dx  
+                  ELSE
+                    IF xx + nx*dx < w THEN INC xx
+                  ENDIF
+
+                CASE CHR$(130) 'LEFT
+                  IF alt THEN
+                    IF dx > MINW.SE THEN INC dx, -1
+                  ELSE
+                    IF xx > 0 THEN INC xx, -1
+                  ENDIF
+
+                CASE CHR$(129) 'DOWN
+                  IF alt THEN
+                    IF dy < MAXH.SE AND yy + ny*dy < h THEN INC dy
+                  ELSE
+                    IF yy + ny*dy < h  THEN INC yy
+                  ENDIF
+
+                CASE CHR$(128) 'UP
+                  IF alt THEN
+                    IF dy > MINH.SE THEN INC dy, -1
+                  ELSE
+                    IF yy > 0 THEN INC yy, -1
+                  ENDIF
+
                 CASE "r"
-                  IF xx + nx*dx < w THEN INC xx
+                  IF (ny + 1)*dy + yy <= h THEN INC ny
+                  'dy = MIN(MAXW.SE, h \ ny)
 
-                CASE "l"
-                  IF xx > 0 THEN INC xx, -1
-
-                CASE "b"
-                  IF yy + ny*dy < h  THEN INC yy
-
-                CASE "t"
-                  IF yy > 0 THEN INC yy, -1
-
-                CASE "w"
-                  IF dx < MAXW.SE AND xx + nx*dx < w THEN INC dx
-
-                CASE "n"
-                  IF dx > MINW.SE THEN INC dx, -1
-
-                CASE "h"
-                  IF dy < MAXH.SE AND yy + ny*dy < h THEN INC dy
-
-                CASE "s"
-                  IF dy > MINH.SE THEN INC dy, -1
-
-                CASE "y"
-                  IF (ny + 1)*dy + yy < h THEN INC ny
-                  dy = MIN(MAXW.SE, h \ ny)
-
-                CASE "Y"
+                CASE "R"
                   IF ny > 1 THEN INC ny, -1
-                  dy = MIN(MAXW.SE, h \ ny)
+                  'dy = MIN(MAXW.SE, h \ ny)
 
-                CASE "x"
-                  IF (nx + 1)*dx + xx < w THEN INC nx
-                  dx = MIN(MAXW.SE, w \ nx)
+                CASE "c"
+                  IF (nx + 1)*dx + xx <= w THEN INC nx
+                  'dx = MIN(MAXW.SE, w \ nx)
 
-                CASE "X"
+                CASE "C"
                   IF nx > 1 THEN INC nx, -1
-                  dx = MIN(MAXW.SE, w \ nx)
+                  'dx = MIN(MAXW.SE, w \ nx)
                 
                 'CASE "i"
                 '  bc = 255 - bc
@@ -2141,7 +2151,7 @@ SUB SEimageScan(filePath AS STRING)
             LOCAL INTEGER px, py
             LOCAL STRING enabled = "abcdefghijklmnopqrstuvwxyz", mapping = ""
             CAT enabled,           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            CAT enabled,           " 0123456789,.+-*/!@#$%^&()_={[}]:;<>?\|'" + CHR$(34)
+            CAT enabled,           " 0123456789,.+-*/!@#$%^&()_={[}]:;<>?\|'~`" + CHR$(34)
             'selection made
             inf(0) = "Now is needed to map every symbol to proper character, so enter"
             inf(1) = "for every symbol keyboard char it should be mapped to."
@@ -2156,14 +2166,14 @@ SUB SEimageScan(filePath AS STRING)
             k = ""
             x = 0
             y = 0           
-            TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+            TEXT x + xx, y + yy, "_", "LT", 7,,RGB(GREEN), RGB(BLACK)
             DO
               DO WHILE k = ""
                 k = INKEY$
               LOOP
               IF INSTR(enabled, k) > 0 THEN
                 px = x: py = y
-                TEXT x + xx, y + yy, k, "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                TEXT x + xx, y + yy, k, "LT", 7,,RGB(GREEN), RGB(BLACK)
                 INC x, dx
                 IF x >= nx*dx THEN
                   x = 0
@@ -2172,7 +2182,7 @@ SUB SEimageScan(filePath AS STRING)
                   ENDIF
                 ENDIF 
                 IF x <> px OR y <> py THEN
-                  TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                  TEXT x + xx, y + yy, "_", "LT", 7,,RGB(GREEN), RGB(BLACK)
                   px = x: py = y
                 ENDIF
                 IF LEN(mapping) < 128 THEN CAT mapping, k
@@ -2195,7 +2205,7 @@ SUB SEimageScan(filePath AS STRING)
                     ENDIF
                   ENDIF
                   IF x <> px OR y <> py THEN
-                    TEXT x + xx, y + yy, " ", "LT", 8,,RGB(RED), RGB(NOTBLACK)
+                    TEXT x + xx, y + yy, " ", "LT", 7,,RGB(RED), RGB(NOTBLACK)
                     px = x: py = y
                   ENDIF
                 ENDIF
@@ -2265,6 +2275,7 @@ SUB SEimageScan(filePath AS STRING)
             TUIwaitingOFF(dialog)
           ENDIF
         ENDIF
+        PAGE COPY 2 TO 0
         PAGE WRITE 0
       ELSE
 
@@ -2276,8 +2287,53 @@ SUB SEimageScan(filePath AS STRING)
   ENDIF
 END SUB
 
+FUNCTION SEgetMinSize(ch AS INTEGER) AS INTEGER
+  'find minimum width and height for given character and return in as MIN_W * 100 + MIN_H
+
+  LOCAL INTEGER w, h, r, c
+  LOCAL STRING b
+
+  h = H.SE
+  r = 0
+  DO WHILE h > 0 AND CHAR.SE(ch - MINC.SE, r) = 0
+    INC r
+    INC h, -1
+  LOOP
+  r = H.SE - 1
+  DO WHILE h > 0 AND CHAR.SE(ch - MINC.SE, r) = 0
+    INC r, -1
+    INC h, -1
+  LOOP
+  w = CHAR.SE(ch - MINC.SE, 0) 
+  FOR r = 1 TO H,SE - 1
+    w = w OR CHAR.SE(ch - MINC.SE, r)
+  NEXT r
+  IF w <> 0 THEN
+    b = BIN$(w, W.SE)
+    w = W.SE
+    DO WHILE w > 0 AND LEFT$(b, 1) = "0"
+      b = MID$(b, 2)
+      INC w, -1
+    LOOP
+    DO WHILE w > 0 AND RIGHT$(b, 1) = "0"
+      b = LEFT$(b, LEN(b) - 1)
+      INC w, -1
+    LOOP
+  ENDIF 
+  SEgetMinSize = h + 100 * w
+END FUNCTION
+
 SUB SEminimalSize
-  IF TUIquestion("FIND FONT MINIMAL SIZE", "Font width and height could be reduced, proceed?") THEN
-    
-  ENDIF
+  'finds minimum size for given font (wihout margins)
+
+  LOCAL INTEGER i, mh = 0, mw = 0
+
+  IF BEGIN.SE <> END.SE THEN LOCAL STRING dialog = TUIwaitingON("FIND FONT MINIMAL SIZE")
+  FOR i = BEGIN.SE TO END.SE
+    IF BEGIN.SE <> END.SE THEN TUIwaitingProgress(dialog, 100*(i - BEGIN.SE)/(END.SE - BEGIN.SE))
+    mh = MAX(mh, SEgetMinSize(i) MOD 100)
+    mw = MAX(mw, SEgetMinSize(i) \ 100)
+  NEXT i
+  IF BEGIN.SE <> END.SE THEN TUIwaitingOFF(dialog)
+  TUIwarning("FIND FONT MINIMAL SIZE", "Characters on TOP-RIGHT: " + STR$(mw) + "x" + STR$(mh))
 END SUB
