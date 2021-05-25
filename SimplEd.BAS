@@ -11,7 +11,7 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.38"
+CONST VERSION.SE = "0.40"
 
 
 CONST MIN_GRF.SE = "0.11"
@@ -22,10 +22,10 @@ CHDIR CWD.SE
 DIM STRING LAST.SE = "NewFont", EXPORT.SE = CWD.SE + "SE_EXPORTED"
 DIM INTEGER T_TIME.SE = 0, C_TIME.SE = 0
 
-'#INCLUDE "TUI.INC"
-'#INCLUDE "GRF.INC"
-#INCLUDE "../LIB/TUI.INC"
-#INCLUDE "../LIB/GRF.INC"
+#INCLUDE "TUI.INC"
+#INCLUDE "GRF.INC"
+'#INCLUDE "../LIB/TUI.INC"
+'#INCLUDE "../LIB/GRF.INC"
 
 CONST NAME_CHARS.SE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_!@#%^&*-+()[]"
 
@@ -58,25 +58,74 @@ DIM STRING MACRO.SE = ""
 DIM STRING MACRO_NAME.SE(20)
 DIM STRING MACRO_CALL.SE(20)
 
+DIM INTEGER NUN.SE = -1, NUN_X.SE = -1, NUN_Y.SE = -1, NUN_L.SE = -1, NUN_R.SE = -1, NUN_SET.SE = 0
+DIM FLOAT NUNX.SE = 1, NUNY.SE = 1
+
 DIM INTEGER MOU.SE = -1, MOU_X.SE = -1, MOU_Y.SE = -1, MOU_L.SE = -1, MOU_R.SE = -1, MOU_W.SE = -1, MOU_SET.SE = 0
 DIM STRING MOU_INF.SE = CWD.SE + "MOUSE.INF"
+DIM STRING NUN_INF.SE = CWD.SE + "NUNCHUK.INF"
+
+
 SEinit
 SEinitMouse
+'SEinitNunchak
 
 ON KEY 157, SEscreenShot
 
 
 DO 
-  IF MOU.SE > -1 THEN SEtestMouse
+  IF MOU.SE > -1 THEN 
+    SEtestMouse
+  ELSEIF NUN.SE > -1 THEN
+    'SEtestNunchuk
+  ENDIF
+  
   kk = INKEY$
   IF kk<>"" THEN 
-    IF MOU.SE > -1 THEN GUI CURSOR HIDE
+    IF MOU.SE > -1 OR NUN.SE > -1 THEN GUI CURSOR HIDE
     SEkey(kk)
-    IF MOU.SE > -1 THEN GUI CURSOR SHOW
+    IF MOU.SE > -1 OR NUN.SE > -1 THEN GUI CURSOR SHOW
   ENDIF
 LOOP
 
 END
+
+SUB SEinitNunchak
+  'try to find nunchak and set NUN.SE to it's port
+
+  LOCAL INTEGER i
+  NUN.SE = -1
+
+  FOR i = 1 TO 3
+    IF NUN.SE < 0 THEN
+      ON ERROR SKIP
+      WII NUNCHUK OPEN i
+      IF MM.ERRNO = 0 THEN
+        NUN.SE = i
+      ENDIF
+    ENDIF
+    IF NUN.SE > 0 THEN
+      IF NUN_SET.SE THEN
+        LOAD PNG "Mouse.PNG", 640, 50
+        GUI CURSOR ON 0, NUNX.SE*NUNCHUK(JX, NUN.SE), NUNY.SE*NUNCHUK(JY, NUN.SE), RGB(GREEN)
+        
+      ELSEIF TUIquestion("NUNCHUK TEST", "Nunchuk found on port " + STR$(NUN.SE) + ", use it?") THEN
+        LOAD PNG "Mouse.PNG", 640, 50
+        GUI CURSOR ON 0, NUNX.SE*NUNCHUK(JX, NUN.SE), NUNY.SE*NUNCHUK(JY, NUN.SE), RGB(GREEN)
+        ON ERROR SKIP
+        OPEN NUN_INF.SE FOR OUTPUT AS #1
+        IF MM.ERRNO = 0 THEN
+          CLOSE #1
+        ENDIF
+
+      ELSE
+        NUN.SE = -1
+
+      ENDIF
+      EXIT SUB
+    ENDIF
+  NEXT i
+END SUB
 
 SUB SEinitMouse
   'try to find mouse and set MOU.SE to it's port
@@ -135,6 +184,108 @@ SUB SEmouseClrPix(xx AS INTEGER, yy AS INTEGER)
   CX.SE = FIX((xx - DX.SE)\PIX.SE)
   CY.SE = FIX((yy - DY.SE)\PIX.SE)
   SEpixel(-1)
+END SUB
+
+SUB SEtestNunchuk
+  'testing NUNCHUK for movement and buttons
+
+  NUNX.SE = W.SE*PIX.SE/256
+  NUNY.SE = H.SE*PIX.SE/256
+  LOCAL INTEGER x = DX.SE + NUNX.SE*NUNCHUK(JX, NUN.SE)
+  LOCAL INTEGER y = DY.SE + NUNY.SE*(255-NUNCHUK(JY, NUN.SE))
+  LOCAL INTEGER l = NUNCHUK(Z, NUN.SE), r = NUNCHUK(C, NUN.SE)
+  LOCAL INTEGER cxl = WW.SE + 4, cyu = 16, pxy = MIN(MAXW.SE \ W.SE, MAXH.SE \ H.SE), change = 0
+  INC cxl, (MAXW.SE - pxy * W.SE) \ 2  
+  INC cyu, (MAXH.SE - pxy * H.SE) \ 2  
+  LOCAL INTEGER cxr = cxl + pxy * W.SE, cyd = cyu + pxy * H.SE
+
+  IF NUN_X.SE <> x OR NUN_Y.SE <> y THEN 'Nunchuk movement
+    GUI CURSOR x, y
+    NUN_X.SE = x
+    NUN_Y.SE = y
+    change = 1
+  ENDIF
+
+  IF NUN_L.SE <> l THEN 'left button change
+    IF l THEN 'pressed
+      SEprepareUndo
+      IF y >= DY.SE AND y < DY.SE + H.SE * PIX.SE THEN
+        IF x >= DX.SE AND x < DX.SE + W.SE * PIX.SE THEN
+          'set pixel
+          SEmouseSetPix(x, y)
+        ENDIF
+      ELSEIF y >= (MM.VRES - H.SE) THEN
+        IF x >= CD.SE THEN
+          'choose character to edit
+          GUI CURSOR HIDE
+          SEcursorS(0)
+          SEcursorB(0)
+          ASC.SE = ((x - CD.SE) \ W.SE) + CMIN.SE
+          SEcursorS(1)
+          SEdrawCharB
+          CX.SE = 0: CY.SE = 0
+          SEcursorB(1)
+          GUI CURSOR SHOW
+        ENDIF
+      ENDIF
+      IF x >= cxl THEN
+        IF x < cxr THEN
+          IF y >= cyu THEN
+            IF y < cyd THEN
+              SEtoClipboard
+              SEshowClipboard
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF
+    ELSE 'released
+    ENDIF
+    NUN_L.SE = l
+  ELSEIF l THEN 'left button hold
+    IF change THEN 'move with left button
+      IF y >= DY.SE AND y < DY.SE + H.SE * PIX.SE THEN
+        IF x >= DX.SE AND x < DX.SE + W.SE * PIX.SE THEN
+          'set pixels
+          SEmouseSetPix(x, y)
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+
+  IF NUN_R.SE <> r THEN 'right button change
+    IF r THEN 'pressed
+      SEprepareUndo
+      IF y >= DY.SE AND y < DY.SE + H.SE * PIX.SE THEN
+        IF x >= DX.SE AND x < DX.SE + W.SE * PIX.SE THEN
+          'erase pixels
+          SEmouseClrPix(x, y)
+        ENDIF
+      ENDIF      
+      IF x >= cxl THEN
+        IF x < cxr THEN
+          IF y >= cyu THEN
+            IF y < cyd THEN
+              SEfromClipboard
+              SEcursorS(1)
+              SEdrawCharB
+              SEcursorB(1)
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF
+    ELSE 'released
+    ENDIF
+    NUN_R.SE = r
+  ELSEIF r THEN 'right button hold
+    IF change THEN 'move with right button
+      IF y >= DY.SE AND y < DY.SE + H.SE * PIX.SE THEN
+        IF x >= DX.SE AND x < DX.SE + W.SE * PIX.SE THEN
+          'erase pixel
+          SEmouseClrPix(x, y)
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
 END SUB
 
 SUB SEtestMouse
@@ -288,7 +439,7 @@ SUB SEkey(kk AS STRING)
   IF (m AND 4) OR (m AND 64) THEN k = ASC(kk) + 3000 'WIN
   IF (m AND 8) OR (m AND 128) THEN k = ASC(kk) + 2000 'SHIFT
 
-  '''TEXT MM.HRES, 0, STR$(k),"RT",,,RGB(WHITE),RGB(NOTBLACK)'''
+  DBG TEXT MM.HRES, 0, STR$(k,4)+"/"+ STR$(m,2),"RT",,,RGB(WHITE),RGB(NOTBLACK)
 
   SELECT CASE k
     CASE 3000 + ASC("0")
@@ -315,7 +466,7 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)      
 
-    CASE ASC("c"), ASC("C") 'center
+    CASE 1000+ASC("c"), 1000+ASC("C") 'center
       SEprepareUndo
       SEmacroAdd(1)
       SEcenter
@@ -323,7 +474,7 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE ASC("l"), ASC("L") 'left
+    CASE 1000+ASC("l"), 1000+ASC("L") 'left
       SEprepareUndo
       SEmacroAdd(2)
       SEleft
@@ -331,7 +482,7 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE ASC("r"), ASC("R") 'right
+    CASE 1000+ASC("r"), 1000+ASC("R") 'right
       SEprepareUndo
       SEmacroAdd(3)
       SEright
@@ -339,7 +490,7 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE ASC("t"), ASC("T") 'top
+    CASE 1000+ASC("t"), 1000+ASC("T") 'top
       SEprepareUndo
       SEmacroAdd(4)
       SEtop
@@ -347,7 +498,7 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE ASC("b"), ASC("B") 'bottom
+    CASE 1000+ASC("b"), 1000+ASC("B") 'bottom
       SEprepareUndo
       SEmacroAdd(5)
       SEbottom
@@ -422,7 +573,7 @@ SUB SEkey(kk AS STRING)
         INC CX.SE, 1
         SEcursorB(1)
       ENDIF
-
+        
     CASE 3130 'WIN left, character cursor left
       SEcharCursLeft
       SEprepareUndo
@@ -493,11 +644,19 @@ SUB SEkey(kk AS STRING)
     CASE 3000 + ASC("i"), 3000 + ASC("I") 'WIN i/I
       SEimport
 
-    CASE 3000 + ASC("f"), 3000 + ASC("F") 'WIN f/F
+    CASE 3000 + ASC("f") 'WIN f, JUMP to first
+      SEcharCurs(BEGIN.SE)
+      SEprepareUndo
+
+    CASE 2070 'WIN+SHIFT F, MARK first
       SEmarkFirst
 
-    CASE 3000 + ASC("l"), 3000 + ASC("L") 'WIN l/L
+    CASE 2076 'WIN+SHIFT L, MARK last
       SEmarkLast
+
+    CASE 3000 + ASC("l") 'WIN l, JUMP to last
+      SEcharCurs(END.SE)
+      SEprepareUndo
 
     CASE 3000 + ASC("m"), 3000 + ASC("M") 'WIN m/M
       SEmacros
@@ -563,6 +722,10 @@ SUB SEkey(kk AS STRING)
     CASE 3045 'WIN -
       SEminusSize
 
+    CASE ELSE
+      SEcharCurs(k MOD 1000)
+      SEprepareUndo
+
   END SELECT
 END SUB
 
@@ -572,7 +735,8 @@ SUB SEinit
   LOCAL INTEGER i
 
   MOU_SET.SE = (MM.INFO(FILESIZE MOU_INF.SE) >= 0)
-
+  NUN_SET.SE = (MM.INFO(FILESIZE NUN_INF.SE) >= 0)
+  
   MODE 1
   CLS RGB(NOTBLACK) 
   LOAD PNG CWD.SE + "Logo.PNG", 584, 0, 2
@@ -712,12 +876,13 @@ SUB SEdrawCharB
   SEsetLimits
 END SUB
 
-SUB SEdrawCharSet
+SUB SEdrawCharSet(start AS INTEGER)
   'draw line of all SMALL characters on bottom of the screen
 
   LOCAL INTEGER i, dx = CD.SE, dy = MM.VRES - H.SE
 
   BOX 0, MM.VRES - MAXH.SE, MM.HRES, MAXH.SE, 0, RGB(NOTBLACK), RGB(NOTBLACK)
+  IF start <> 0 THEN CMIN.SE = start
   FOR i = CMIN.SE TO CMAX.SE
     SEdrawCharS(i, dx, dy)
     INC dx, W.SE
@@ -947,6 +1112,33 @@ SUB SEcharCursLeft
       CX.SE = 0: CY.SE = 0
       SEcursorB(1)
     ENDIF
+  ENDIF
+END SUB
+
+SUB SEcharCurs(char AS INTEGER)
+  'move SMALL cursor to specific char
+
+  IF char>=MINC.SE AND char<= MAXC.SE THEN
+    SEcursorS(0)
+    SEcursorB(0)
+    ASC.SE = char
+    IF ASC.SE<CMIN.SE THEN
+      DO WHILE CMIN.SE>ASC.SE
+        INC CMAX.SE, -1
+        INC CMIN.SE, -1
+      LOOP
+      SEdrawCharSet(CMIN.SE)
+    ELSEIF ASC.SE>CMAX.SE THEN
+      DO WHILE CMAX.SE<ASC.SE
+        INC CMAX.SE
+        INC CMIN.SE
+      LOOP
+      SEdrawCharSet(CMIN.SE)
+    ENDIF
+    SEdrawCharB
+    CX.SE = 0: CY.SE = 0
+    SEcursorB(1)
+    SEcursorS(1)
   ENDIF
 END SUB
 
@@ -1700,12 +1892,10 @@ SUB SEhelp
   'print HELP
 
   LOCAL INTEGER dx = WW.SE + 8, dy = MAXH.SE + 16 + 4
-  TEXT dx, dy, CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"  EDITOR cursor (SHIFT fast)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  TEXT dx, dy, CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"   EDITOR cursor (SHFT fast)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
-  TEXT dx, dy, "SPACE  INVERT pixel", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "LRTBC  LEFT/RIGHT/TOP/BOTTOM/CENTER", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 20  
+  TEXT dx, dy, "SPACE     INVERT pixel", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  INC dy, 18  
   TEXT dx, dy, "CTRL-C/V  COPY/PASTE to/from CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "CTRL-S    SWAP char and CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
@@ -1713,8 +1903,10 @@ SUB SEhelp
   TEXT dx, dy, "CTRL-O    OR from CLIP (COMBINE)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "CTRL-Z    UNDO/REDO last change", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 20  
+  INC dy, 18  
   TEXT dx, dy, "Alt " + CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"  SHIFT character", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  INC dy, 16  
+  TEXT dx, dy, "Alt LRTBC    SHIFT to L/R/T/B/CTR", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "Alt H/V      MIRROR horiz/vert", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
@@ -1727,10 +1919,10 @@ SUB SEhelp
   TEXT dx, dy, "Alt N        ROTATE char 90" + CHR$(216), "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, "Alt S        SPECIAL functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 20  
+  INC dy, 18  
   TEXT dx, dy, CHR$(213)+" "+CHR$(228)+" "+CHR$(227)+"  Choose char to EDIT", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" F/L  MARK FIRST/LAST char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  TEXT dx, dy, CHR$(213)+" flFL JUMP/MARK FIRST/LAST char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" 0    Find font's minimal SIZE", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
@@ -1747,10 +1939,12 @@ SUB SEhelp
   TEXT dx, dy, CHR$(213)+" E    Export FNT, FIRST to LAST", "LT",,,RGB(CYAN), RGB(NOTBLACK)
   INC dy, 16  
   TEXT dx, dy, CHR$(213)+" M    MACRO functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 20  
+  INC dy, 18  
   TEXT dx, dy, "PrtScr Screenshot to 'SSxxx.BMP'", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 20
+  INC dy, 18
   TEXT dx, dy, CHR$(213)+" Q    QUIT SimplEd", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  INC dy, 18
+  TEXT dx, dy, "Any other key jumps to this char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
 END SUB
 
 SUB SEspecial
@@ -2044,13 +2238,13 @@ SUB SEimageScan(filePath AS STRING)
         IF nx > 0 AND nx < w THEN
          LOCAL INTEGER ny = VAL(TUIinput("IMAGE SCANNER", "Rows count:", "", "0123456789"))
           IF ny > 0 AND ny < w THEN
-            LOCAL INTEGER dx = MIN(MAXW.SE, w \ nx), dy = MIN(MAXH.SE, h \ ny), xx = 0, yy = 0, hlp = 1, alt, m
+            LOCAL INTEGER dx = MIN(MAXW.SE, w \ nx), dy = MIN(MAXH.SE, h \ ny), xx = 0, yy = 0, hlp = 1, alt, m, shft
             LOCAL STRING k = ""
             
             LOCAL STRING inf(7)
             inf(0) = "You should adjust red grid to every character"
             inf(1) = "KEYS:"
-            inf(2) = "CRSR      move grid left, right, top or bottom (offset)"
+            inf(2) = "CRSR      move grid left, right, top or bottom (offset), faster with SHIFT"
             inf(3) = "ALT+CRSR  make characters wider, narrower, higher or smaller"
             inf(4) = "r/R/c/C   more/less character in row/column (extend/reduce grid)"
             inf(5) = "?         this HELP"
@@ -2083,6 +2277,12 @@ SUB SEimageScan(filePath AS STRING)
               ELSE
                 alt = 0
               ENDIF
+              IF (m AND 8) OR (m AND 128) THEN 
+                shft = 1
+              ELSE
+                shft = 0
+              ENDIF
+
 
               SELECT CASE k
                 CASE CHR$(131) 'RIGHT
@@ -2092,9 +2292,14 @@ SUB SEimageScan(filePath AS STRING)
                     IF xx + nx*dx < w THEN INC xx
                   ENDIF
 
+                CASE CHR$(163) 'SHIFT RIGHT
+                  IF xx + 10 + nx*dx < w THEN INC xx, 10
+
                 CASE CHR$(130) 'LEFT
                   IF alt THEN
                     IF dx > MINW.SE THEN INC dx, -1
+                  ELSEIF shft THEN
+                    IF xx-10 > 0 THEN INC xx, -10
                   ELSE
                     IF xx > 0 THEN INC xx, -1
                   ENDIF
@@ -2106,9 +2311,14 @@ SUB SEimageScan(filePath AS STRING)
                     IF yy + ny*dy < h  THEN INC yy
                   ENDIF
 
+                CASE CHR$(161) 'SHIFT DOWN
+                  IF yy + 10 + ny*dy < h  THEN INC yy, 10
+
                 CASE CHR$(128) 'UP
                   IF alt THEN
                     IF dy > MINH.SE THEN INC dy, -1
+                  ELSEIF shft THEN
+                    IF yy-10 > 0 THEN INC yy, -10
                   ELSE
                     IF yy > 0 THEN INC yy, -1
                   ENDIF
@@ -2234,11 +2444,12 @@ SUB SEimageScan(filePath AS STRING)
             DY.SE = (WW.SE - PIX.SE * H.SE) \ 2
             BEGIN.SE = MINC.SE
             dialog = TUIwaitingON("IMAGE SCANNER - CREATE FONT")
-            FOR x = MINC.SE TO MAXC.SE
-              FOR y = 0 TO MAXH.SE - 1
-                CHAR.SE(x - MINC.SE, y) = 0
-              NEXT y
-            NEXT x
+            'let the old characters to be here
+            'FOR x = MINC.SE TO MAXC.SE
+            '  FOR y = 0 TO MAXH.SE - 1
+            '    CHAR.SE(x - MINC.SE, y) = 0
+            '  NEXT y
+            'NEXT x
             LOCAL INTEGER i, rx = xx, ry = yy
 
             ASC.SE = MINC.SE
