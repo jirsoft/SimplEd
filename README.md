@@ -7,7 +7,7 @@ Simple font editor for CMM2 with basic mouse support.
 	File has 2 sections:
 	1. #help-texts, here is on-screen-help for skortcuts
 	2. #shortcuts, here are the actuall keys
-	Keys numbers for the section 2 can be found by running included Show_keys.BAS
+	Keys numbers for the section 2 can be found by running included Show_Keys.BAS
 	
 #### v0.40
 	IMPORT from image doesn't erase font, so you can import new characters from different images into same font
