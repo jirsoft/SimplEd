@@ -3,9 +3,9 @@ Simple font editor for CMM2 with basic mouse support.
 
 #### v0.41
 	Keys can now be defined in SimplEd.CFG file, when this file not exists, default keys are used
-	(sample SimplEd.CFG file is provided, with comments inside)
+	(sample SimplEd.CFG file is provided, with comments inside, WIN is replaced with other keys)
 	File has 2 sections:
-	1. #help-texts, here is on screen help for skortcuts
+	1. #help-texts, here is on-screen-help for skortcuts
 	2. #shortcuts, here are the actuall keys
 	Keys numbers for the section 2 can be found by running included Show_keys.BAS
 	
