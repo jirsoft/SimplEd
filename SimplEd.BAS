@@ -11,7 +11,7 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.40"
+CONST VERSION.SE = "0.41"
 
 
 CONST MIN_GRF.SE = "0.11"
@@ -39,6 +39,10 @@ DIM INTEGER CMIN.SE = MINC.SE, CMAX.SE = MINC.SE
 
 DIM INTEGER W.SE = 8, H.SE = 8
 DIM INTEGER CW.SE = W.SE * (MM.HRES \ W.SE), CD.SE = (MM.HRES - CW.SE) \ 2
+
+DIM INTEGER SHORTCUT.SE(47) 'all 44 shortcuts for SimplEd
+DIM STRING SHORTCUT_TXT.SE(25) 'all 26 shortcut help strings for SimplEd
+
 
 DIM STRING COL.SE, ROW.SE
 DIM INTEGER LIMIT.SE = 0
@@ -70,7 +74,8 @@ SEinit
 SEinitMouse
 'SEinitNunchak
 
-ON KEY 157, SEscreenShot
+'shortcut 46
+ON KEY SHORTCUT.SE(46), SEscreenShot
 
 
 DO 
@@ -429,125 +434,30 @@ END SUB
 SUB SEkey(kk AS STRING)
   'main key seting method
 
-  LOCAL INTEGER m = KEYDOWN(7)
+  LOCAL INTEGER m = KEYDOWN(7), mm = 0
   LOCAL INTEGER k = ASC(kk)
   LOCAL INTEGER hlp, hlp1, hlp2, i, j, cnt
   LOCAL STRING s
   
-  IF (m AND 1) OR (m AND 16) THEN k = ASC(kk) + 1000 'ALT
-  IF (m AND 2) OR (m AND 32) THEN k = ASC(kk) + 4000 'CTRL
-  IF (m AND 4) OR (m AND 64) THEN k = ASC(kk) + 3000 'WIN
-  IF (m AND 8) OR (m AND 128) THEN k = ASC(kk) + 2000 'SHIFT
+  IF (m AND 1) OR (m AND 16) THEN INC mm, 1000 'ALT
+  IF (m AND 2) OR (m AND 32) THEN INC mm, 4000 'CTRL
+  IF (m AND 4) OR (m AND 64) THEN INC mm, 3000 'WIN
+  IF (m AND 8) OR (m AND 128) THEN INC mm, 2000 'SHIFT
 
+  INC k, mm
   DBG TEXT MM.HRES, 0, STR$(k,4)+"/"+ STR$(m,2),"RT",,,RGB(WHITE),RGB(NOTBLACK)
 
   SELECT CASE k
-    CASE 3000 + ASC("0")
-      SEminimalSize
-
-    CASE 3000 + ASC("q"), 3000 + ASC("Q")
-      IF TUIquestion("QUIT", "Are you ready to leave me alone?") THEN SEquit
-
-    CASE 3000 + ASC("p"), 3000 + ASC("P") 'preview
-      SEpreviewFont
-
-    CASE 1000 + ASC("s"), 1000 + ASC("S") 'special function
-      SEprepareUndo
-      SEspecial
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-      
-    CASE 1000 + ASC("n"), 1000 + ASC("N") 'rotate 90` degrees
-      SEprepareUndo
-      SEmacroAdd(0)
-      SEninety
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)      
-
-    CASE 1000+ASC("c"), 1000+ASC("C") 'center
-      SEprepareUndo
-      SEmacroAdd(1)
-      SEcenter
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000+ASC("l"), 1000+ASC("L") 'left
-      SEprepareUndo
-      SEmacroAdd(2)
-      SEleft
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000+ASC("r"), 1000+ASC("R") 'right
-      SEprepareUndo
-      SEmacroAdd(3)
-      SEright
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000+ASC("t"), 1000+ASC("T") 'top
-      SEprepareUndo
-      SEmacroAdd(4)
-      SEtop
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000+ASC("b"), 1000+ASC("B") 'bottom
-      SEprepareUndo
-      SEmacroAdd(5)
-      SEbottom
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 128  'cursor up
+    'cursor up
+    CASE SHORTCUT.SE(00) 
       IF CY.SE > 0 THEN
         SEcursorB(0)
         INC CY.SE, -1
         SEcursorB(1)
       ENDIF
 
-    CASE 129  'cursor down
-      IF CY.SE < H.SE - 1 THEN
-        SEcursorB(0)
-        INC CY.SE, 1
-        SEcursorB(1)
-      ENDIF
-
-    CASE 130  'cursor left
-      IF CX.SE > 0 THEN
-        SEcursorB(0)
-        INC CX.SE, -1
-        SEcursorB(1)
-      ENDIF
-
-    CASE 2163  'fast right
-      SEcursorB(0)
-      IF CX.SE+W.SE\4 < W.SE THEN
-        INC CX.SE, W.SE\4
-      ELSE
-        CX.SE = W.SE - 1
-      ENDIF
-      SEcursorB(1)
-     
-
-    CASE 2130  'fast left
-      SEcursorB(0)
-      IF CX.SE > W.SE\4 THEN
-        INC CX.SE, -W.SE\4
-      ELSE
-        CX.SE = 0
-      ENDIF
-      SEcursorB(1)
-     
-
-    CASE 2128  'fast up
+    'fast cursor up
+    CASE SHORTCUT.SE(01)  
       SEcursorB(0)
       IF CY.SE > H.SE\4 THEN
         INC CY.SE, -H.SE\4
@@ -556,8 +466,16 @@ SUB SEkey(kk AS STRING)
       ENDIF
       SEcursorB(1)
      
+    'cursor down
+    CASE SHORTCUT.SE(02)
+      IF CY.SE < H.SE - 1 THEN
+        SEcursorB(0)
+        INC CY.SE, 1
+        SEcursorB(1)
+      ENDIF
 
-    CASE 2161  'fast down
+    'fast cursor down
+    CASE SHORTCUT.SE(03)
       SEcursorB(0)
       IF CY.SE+H.SE\4 < H.SE THEN
         INC CY.SE, H.SE\4
@@ -566,118 +484,54 @@ SUB SEkey(kk AS STRING)
       ENDIF
       SEcursorB(1)
      
+    'cursor left
+    CASE SHORTCUT.SE(04)
+      IF CX.SE > 0 THEN
+        SEcursorB(0)
+        INC CX.SE, -1
+        SEcursorB(1)
+      ENDIF
 
-    CASE 131  'cursor right
+    'fast cursor left
+    CASE SHORTCUT.SE(05)
+      SEcursorB(0)
+      IF CX.SE > W.SE\4 THEN
+        INC CX.SE, -W.SE\4
+      ELSE
+        CX.SE = 0
+      ENDIF
+      SEcursorB(1)
+     
+    'cursor right
+    CASE SHORTCUT.SE(06)
       IF CX.SE < W.SE - 1 THEN
         SEcursorB(0)
         INC CX.SE, 1
         SEcursorB(1)
       ENDIF
         
-    CASE 3130 'WIN left, character cursor left
-      SEcharCursLeft
-      SEprepareUndo
-        
-    CASE 3131 'WIN right, character  cursor right
-      SEcharCursRight
-      SEprepareUndo
-
-    CASE 1130 'ALT left
-      SEprepareUndo
-      SEmacroAdd(6)
-      SErotateLeft
-      SEcursorS(1)
-      SEdrawCharB
+    'fast cursor right
+    CASE SHORTCUT.SE(07)
+      SEcursorB(0)
+      IF CX.SE+W.SE\4 < W.SE THEN
+        INC CX.SE, W.SE\4
+      ELSE
+        CX.SE = W.SE - 1
+      ENDIF
       SEcursorB(1)
+     
+    'SPACE, pixel ON/OFF
+    CASE SHORTCUT.SE(08)
+      SEpixel
 
-    CASE 1128 'ALT up
-      SEprepareUndo
-      SEmacroAdd(8)
-      SErotateUp
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1129 'ALT down, rotate down  
-      SEprepareUndo
-      SEmacroAdd(9)
-      SErotateDown
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1131 'ALT right, rotate right
-      SEprepareUndo
-      SEmacroAdd(7)
-      SErotateRight
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000 + ASC("i"), 1000 + ASC("I") 'ALT i/I
-      SEprepareUndo
-      SEmacroAdd(10)
-      SEinvert
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000 + ASC("h"), 1000 + ASC("H") 'ALT h/H
-      SEprepareUndo
-      SEmacroAdd(11)
-      SEhorMirror
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 1000 + ASC("v"), 1000 + ASC("V") 'ALT v/V
-      SEprepareUndo
-      SEmacroAdd(12)
-      SEverMirror
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 3000 + ASC("e"), 3000 + ASC("E") 'WIN e/E
-      SEexport
-      
-    CASE 3000 + ASC("i"), 3000 + ASC("I") 'WIN i/I
-      SEimport
-
-    CASE 3000 + ASC("f") 'WIN f, JUMP to first
-      SEcharCurs(BEGIN.SE)
-      SEprepareUndo
-
-    CASE 2070 'WIN+SHIFT F, MARK first
-      SEmarkFirst
-
-    CASE 2076 'WIN+SHIFT L, MARK last
-      SEmarkLast
-
-    CASE 3000 + ASC("l") 'WIN l, JUMP to last
-      SEcharCurs(END.SE)
-      SEprepareUndo
-
-    CASE 3000 + ASC("m"), 3000 + ASC("M") 'WIN m/M
-      SEmacros
-
-    CASE 1000 + ASC("f"), 1000 + ASC("F") 'ALT f/F, fill character
-      SEprepareUndo
-      SEfill
-
-    CASE 4003 'CTRL-C, copy character to clipboard
+    'CTRL-C, copy character to clipboard
+    CASE SHORTCUT.SE(09)
       SEmacroAdd(13)
       SEtoClipboard
       SEshowClipboard
 
-    CASE 4019 'CTRL-S, swap character and clipboard
-      SEswapClipboard
-      SEshowClipboard
-      SEcursorS(1)
-      SEdrawCharB
-      SEcursorB(1)
-
-    CASE 4022 'CTRL-V, paste clipboard to character
+    'CTRL-V, paste clipboard to character
+    CASE SHORTCUT.SE(10)
       SEprepareUndo
       SEmacroAdd(14)
       SEfromClipboard
@@ -685,7 +539,16 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE 4015 'CTRL-O, OR-paste clipboard to character
+    'CTRL-S, swap character and clipboard
+    CASE SHORTCUT.SE(11)
+      SEswapClipboard
+      SEshowClipboard
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'CTRL-O, OR-paste clipboard to character
+    CASE SHORTCUT.SE(12)
       SEprepareUndo
       SEmacroAdd(15)
       SEorFromClipboard
@@ -693,10 +556,116 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
 
-    CASE 4026 'CTRL-Z, undo
+    'CTRL-Z, undo
+    CASE SHORTCUT.SE(13)
       SEundo
 
-    CASE 1000 + ASC("e"), 1000 + ASC("E") 'erase character
+    'ALT up, shift (rotate) up
+    CASE SHORTCUT.SE(14)
+      SEprepareUndo
+      SEmacroAdd(8)
+      SErotateUp
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT down, shift (rotate) down
+    CASE SHORTCUT.SE(15)
+      SEprepareUndo
+      SEmacroAdd(9)
+      SErotateDown
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT left, shift (rotate) left
+    CASE SHORTCUT.SE(16)
+      SEprepareUndo
+      SEmacroAdd(6)
+      SErotateLeft
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT right, shift (rotate) right
+    CASE SHORTCUT.SE(17)
+      SEprepareUndo
+      SEmacroAdd(7)
+      SErotateRight
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT l,move total left
+    CASE SHORTCUT.SE(18)
+      SEprepareUndo
+      SEmacroAdd(2)
+      SEleft
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT r, move total right
+    CASE SHORTCUT.SE(19)
+      SEprepareUndo
+      SEmacroAdd(3)
+      SEright
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT t, move total top
+    CASE SHORTCUT.SE(20)
+      SEprepareUndo
+      SEmacroAdd(4)
+      SEtop
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT b, move total bottom
+    CASE SHORTCUT.SE(21)
+      SEprepareUndo
+      SEmacroAdd(5)
+      SEbottom
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT c, center char
+    CASE SHORTCUT.SE(22)
+      SEprepareUndo
+      SEmacroAdd(1)
+      SEcenter
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT h, mirror horizontal
+    CASE SHORTCUT.SE(23)
+      SEprepareUndo
+      SEmacroAdd(11)
+      SEhorMirror
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT v, mirror vertical
+    CASE SHORTCUT.SE(24)
+      SEprepareUndo
+      SEmacroAdd(12)
+      SEverMirror
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'ALT f, fill character
+    CASE SHORTCUT.SE(25)
+      SEprepareUndo
+      SEfill
+
+    'ALT-e, erase character
+    CASE SHORTCUT.SE(26)
       SEprepareUndo
       SEmacroAdd(16)
       SEerase
@@ -704,23 +673,105 @@ SUB SEkey(kk AS STRING)
       SEdrawCharB
       SEcursorB(1)
     
-    CASE 32 'SPACE, pixel ON/OFF
-      SEpixel
+    'ALT i, invert char
+    CASE SHORTCUT.SE(27)
+      SEprepareUndo
+      SEmacroAdd(10)
+      SEinvert
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
 
-    CASE 3000 + ASC("d"), 3000 + ASC("D") 'WIN d/D, load default font
-      SEdefaultFont
+    'ALT n,rotate 90` degrees
+    CASE SHORTCUT.SE(28)
+      SEprepareUndo
+      SEmacroAdd(0)
+      SEninety
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)      
 
-    CASE 3000 + ASC("h"), 3000 + ASC("H") 'WIN h/H, enter new height
-      SEnewHeight
+    'ALT s, special function
+    CASE SHORTCUT.SE(29)
+      SEprepareUndo
+      SEspecial
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+      
+    'WIN left, character cursor left
+    CASE SHORTCUT.SE(30)
+      SEcharCursLeft
+      SEprepareUndo
+        
+    'WIN right, character  cursor right
+    CASE SHORTCUT.SE(31)
+      SEcharCursRight
+      SEprepareUndo
 
-    CASE 3000 + ASC("w"), 3000 + ASC("W") 'WIN w/W, enter new width
-      SEnewWidth
+    'WIN f, JUMP to first
+    CASE SHORTCUT.SE(32)
+      SEcharCurs(BEGIN.SE)
+      SEprepareUndo
 
-    CASE 3043 'WIN +
+    'WIN l, JUMP to last
+    CASE SHORTCUT.SE(33)
+      SEcharCurs(END.SE)
+      SEprepareUndo
+
+    'WIN+SHIFT F, MARK first
+    CASE SHORTCUT.SE(34)
+      SEmarkFirst
+
+    'WIN+SHIFT L, MARK last
+    CASE SHORTCUT.SE(35)
+      SEmarkLast
+
+    'WIN 0, find minimum font size
+    CASE SHORTCUT.SE(36)
+      SEminimalSize
+
+    'WIN +, make font bigger
+    CASE SHORTCUT.SE(37)
       SEplusSize
 
-    CASE 3045 'WIN -
+    'WIN -, make font smaller
+    CASE SHORTCUT.SE(38)
       SEminusSize
+
+    'WIN h, enter new height
+    CASE SHORTCUT.SE(39)
+      SEnewHeight
+
+    'WIN w, enter new width
+    CASE SHORTCUT.SE(40)
+      SEnewWidth
+
+    'WIN p, preview font (FIRST to LAS)
+    CASE SHORTCUT.SE(41)
+      SEpreviewFont
+
+    'WIN d, load default font
+    CASE SHORTCUT.SE(42)
+      SEdefaultFont
+
+    'WIN i, import file
+    CASE SHORTCUT.SE(43)
+      SEimport
+
+    'WIN e, export font (FIRST to LAST)
+    CASE SHORTCUT.SE(44)
+      SEexport
+      
+    'WIN m, macro functions
+    CASE SHORTCUT.SE(45)
+      SEmacros
+
+    'shortcut 46 is default PrintScreen (0157), set on row 78 (ON KEY...)
+
+    'WIN q, QUIT SimplEd
+    CASE SHORTCUT.SE(47)
+      IF TUIquestion("QUIT", "Are you ready to leave me alone?") THEN SEquit
 
     CASE ELSE
       SEcharCurs(k MOD 1000)
@@ -753,6 +804,8 @@ SUB SEinit
   FOR i = 0 TO BOUND(MACRO_NAME.SE())
     READ MACRO_NAME.SE(i), MACRO_CALL.SE(i)
   NEXT i
+  SEreadDefaults
+  SEreadConfig("SimplEd.CFG")
   SEhelp
   SEdefaultChars(1)
   SEdrawCharSet
@@ -1888,65 +1941,6 @@ SUB SEpreviewFont
   PAGE COPY 1 TO 0
 END SUB
 
-SUB SEhelp
-  'print HELP
-
-  LOCAL INTEGER dx = WW.SE + 8, dy = MAXH.SE + 16 + 4
-  TEXT dx, dy, CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"   EDITOR cursor (SHFT fast)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "SPACE     INVERT pixel", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18  
-  TEXT dx, dy, "CTRL-C/V  COPY/PASTE to/from CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "CTRL-S    SWAP char and CLIP", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "CTRL-O    OR from CLIP (COMBINE)", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "CTRL-Z    UNDO/REDO last change", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18  
-  TEXT dx, dy, "Alt " + CHR$(225)+" "+CHR$(226)+" "+CHR$(228)+" "+CHR$(227)+"  SHIFT character", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt LRTBC    SHIFT to L/R/T/B/CTR", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt H/V      MIRROR horiz/vert", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt F        FLOOD FILL char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt E        ERASE char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt I        INVERT char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt N        ROTATE char 90" + CHR$(216), "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, "Alt S        SPECIAL functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18  
-  TEXT dx, dy, CHR$(213)+" "+CHR$(228)+" "+CHR$(227)+"  Choose char to EDIT", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" flFL JUMP/MARK FIRST/LAST char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" 0    Find font's minimal SIZE", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" +/-  Make font BIGGER/SMALLER", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" H/W  Set font HEIGHT/WIDTH", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" P    Preview font", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" D    Choose default font", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" I    Import FNT,BAS,INC or IMAGE", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" E    Export FNT, FIRST to LAST", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 16  
-  TEXT dx, dy, CHR$(213)+" M    MACRO functions", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18  
-  TEXT dx, dy, "PrtScr Screenshot to 'SSxxx.BMP'", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18
-  TEXT dx, dy, CHR$(213)+" Q    QUIT SimplEd", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-  INC dy, 18
-  TEXT dx, dy, "Any other key jumps to this char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
-END SUB
-
 SUB SEspecial
   'SPECIAL functions
 
@@ -2548,3 +2542,219 @@ SUB SEminimalSize
   IF BEGIN.SE <> END.SE THEN TUIwaitingOFF(dialog)
   TUIwarning("FIND FONT MINIMAL SIZE", "Characters on TOP-RIGHT: " + STR$(mw) + "x" + STR$(mh))
 END SUB
+
+FUNCTION SEskipBlank(s AS STRING) AS STRING
+  'remove spaces and tabs from left and right
+
+  SEskipBlank = s
+  DO WHILE LEFT$(SEskipBlank,1)=" ") OR LEFT$(SEskipBlank,1)=CHR$(9) OR RIGHT$(SEskipBlank,1)=" " OR RIGHT$(SEskipBlank,1)=CHR$(9))
+    IF LEFT$(SEskipBlank,1)=" " OR LEFT$(SEskipBlank,1)=CHR$(9) THEN
+      SEskipBlank = MID$(SEskipBlank,2)
+    ENDIF
+    IF RIGHT$(SEskipBlank,1)=" " OR RIGHT$(SEskipBlank,1)=CHR$(9) THEN
+      SEskipBlank = LEFT$(SEskipBlank,LEN(SEskipBlank)-1)
+    ENDIF
+  LOOP
+END FUNCTION
+
+FUNCTION SEreplaceChr(s AS STRING) AS STRING
+  'replace all {charcode} for CHR$(charcode)
+ 
+  SEreplaceChr = s
+  LOCAL INTEGER p=INSTR(1,SEreplaceChr,"{"), p1
+  DO WHILE p>0
+    p1=INSTR(p,SEreplaceChr,"}")
+    IF p1>0 THEN
+      SEreplaceChr = LEFT$(SEreplaceChr,p-1) + CHR$(MIN(MAX(VAL(MID$(SEreplaceChr,p+1,p1-p-1)),0),255)) + MID$(SEreplaceChr,p1+1)
+      p=INSTR(1,SEreplaceChr,"{")
+    ELSE
+      p=0
+    ENDIF
+  LOOP
+END FUNCTION
+
+SUB SEhelp
+  'print HELP
+
+  LOCAL INTEGER dx = WW.SE + 8, dy = MAXH.SE + 16 + 5
+  TEXT dx, dy, SHORTCUT_TXT.SE(00), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(01), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21  
+  TEXT dx, dy, SHORTCUT_TXT.SE(02), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(03), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(04), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(05), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21  
+  TEXT dx, dy, SHORTCUT_TXT.SE(06), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(07), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(08), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(09), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(10), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(11), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(12), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(13), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21  
+  TEXT dx, dy, SHORTCUT_TXT.SE(14), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(15), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(16), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(17), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(18), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(19), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(20), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(21), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(22), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 15  
+  TEXT dx, dy, SHORTCUT_TXT.SE(23), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21  
+  TEXT dx, dy, SHORTCUT_TXT.SE(24), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21
+  TEXT dx, dy, SHORTCUT_TXT.SE(25), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21
+  TEXT dx, dy, " Any other key jumps to this char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+END SUB
+
+'DIM STRING SHORTCUT.SE(43) 'all 44 shortcuts for SimplEd
+SUB SEreadDefaults
+  SHORTCUT_TXT.SE(00) = SEreplaceChr("{225} {226} {228} {227}   EDITOR cursor (SHFT fast)")
+  SHORTCUT.SE(00) = 0128  'up
+  SHORTCUT.SE(01) = 2128  'SHIFT up
+  SHORTCUT.SE(02) = 0129  'down
+  SHORTCUT.SE(03) = 2161  'SHIFT down
+  SHORTCUT.SE(04) = 0130  'left
+  SHORTCUT.SE(05) = 2130  'SHIFT left
+  SHORTCUT.SE(06) = 0131  'right
+  SHORTCUT.SE(07) = 2163  'SHIFT right
+
+  SHORTCUT_TXT.SE(01) = SEreplaceChr("SPACE     INVERT pixel")
+  SHORTCUT.SE(08) = 0032  'space
+
+  SHORTCUT_TXT.SE(02) = SEreplaceChr("CTRL c/v  COPY/PASTE to/from CLIP")
+  SHORTCUT.SE(09) = 4003  'CTRL c
+  SHORTCUT.SE(10) = 4022  'CTRL v
+
+  SHORTCUT_TXT.SE(03) = SEreplaceChr("CTRL s    SWAP char and CLIP")
+  SHORTCUT.SE(11) = 4019  'CTRL s
+
+  SHORTCUT_TXT.SE(04) = SEreplaceChr("CTRL o    OR from CLIP (COMBINE)")
+  SHORTCUT.SE(12) = 4015  'CTRL o
+
+  SHORTCUT_TXT.SE(05) = SEreplaceChr("CTRL z    UNDO/REDO last change")
+  SHORTCUT.SE(13) = 4026  'CTRL z
+
+  SHORTCUT_TXT.SE(06) = SEreplaceChr("ALT {225} {226} {228} {227}  SHIFT character")
+  SHORTCUT.SE(14) = 1128  'ALT up
+  SHORTCUT.SE(15) = 1129  'ALT down
+  SHORTCUT.SE(16) = 1130  'ALT left
+  SHORTCUT.SE(17) = 1131  'ALT right
+
+  SHORTCUT_TXT.SE(07) = SEreplaceChr("ALT lrtbc    SHIFT to L/R/T/B/CTR")
+  SHORTCUT.SE(18) = 1108  'ALT l
+  SHORTCUT.SE(19) = 1114  'ALT r
+  SHORTCUT.SE(20) = 1116  'ALT t
+  SHORTCUT.SE(21) = 1098  'ALT b
+  SHORTCUT.SE(22) = 1099  'ALT c
+
+  SHORTCUT_TXT.SE(08) = SEreplaceChr("ALT h/v      MIRROR horiz/vert")
+  SHORTCUT.SE(23) = 1104  'ALT h
+  SHORTCUT.SE(24) = 1118  'ALT v
+
+  SHORTCUT_TXT.SE(09) = SEreplaceChr("ALT f        FLOOD FILL char")
+  SHORTCUT.SE(25) = 1102  'ALT f
+
+  SHORTCUT_TXT.SE(10) = SEreplaceChr("ALT e        ERASE char")
+  SHORTCUT.SE(26) = 1101  'ALT e
+
+  SHORTCUT_TXT.SE(11) = SEreplaceChr("ALT i        INVERT char")
+  SHORTCUT.SE(27) = 1105  'ALT i
+
+  SHORTCUT_TXT.SE(12) = SEreplaceChr("ALT n        ROTATE char 90{216}")
+  SHORTCUT.SE(28) = 1110  'ALT n
+
+  SHORTCUT_TXT.SE(13) = SEreplaceChr("ALT s        SPECIAL functions")
+  SHORTCUT.SE(29) = 1115  'ALT s
+
+  SHORTCUT_TXT.SE(14) = SEreplaceChr("{213} {228} {227}  Choose char to EDIT")
+  SHORTCUT.SE(30) = 3130  'WIN left
+  SHORTCUT.SE(31) = 3131  'WIN right
+
+  SHORTCUT_TXT.SE(15) = SEreplaceChr("{213} flFL JUMP to/MARK FIRST/LAST char")
+  SHORTCUT.SE(32) = 3102  'WIN f
+  SHORTCUT.SE(33) = 3108  'WIN l
+  SHORTCUT.SE(34) = 5070  'WIN SHIFT F
+  SHORTCUT.SE(35) = 5076  'WIN SHIFT L
+
+  SHORTCUT_TXT.SE(16) = SEreplaceChr("{213} 0    Find font's minimal SIZE")
+  SHORTCUT.SE(36) = 3048  'WIN 0
+
+  SHORTCUT_TXT.SE(17) = SEreplaceChr("{213} +/-  Make font BIGGER/SMALLER")
+  SHORTCUT.SE(37) = 3043  'WIN +
+  SHORTCUT.SE(38) = 3045  'WIN -
+
+  SHORTCUT_TXT.SE(18) = SEreplaceChr("{213} h/w  Set font HEIGHT/WIDTH")
+  SHORTCUT.SE(39) = 3104  'WIN h
+  SHORTCUT.SE(40) = 3119  'WIN w
+
+  SHORTCUT_TXT.SE(19) = SEreplaceChr("{213} p    Preview font")
+  SHORTCUT.SE(41) = 3112  'WIN p
+
+  SHORTCUT_TXT.SE(20) = SEreplaceChr("{213} d    Choose default font")
+  SHORTCUT.SE(42) = 3100  'WIN d
+
+  SHORTCUT_TXT.SE(21) = SEreplaceChr("{213} i    Import FNT,BAS,INC or IMAGE")
+  SHORTCUT.SE(43) = 3105  'WIN i
+
+  SHORTCUT_TXT.SE(22) = SEreplaceChr("{213} e    Export FNT, FIRST to LAST")
+  SHORTCUT.SE(44) = 3101  'WIN e
+
+  SHORTCUT_TXT.SE(23) = SEreplaceChr("{213} m    MACRO functions")
+  SHORTCUT.SE(45) = 3109  'WIN m
+
+  SHORTCUT_TXT.SE(24) = SEreplaceChr("PrtScr Screenshot to 'SSxxx.BMP'")
+  SHORTCUT.SE(46) = 0157  'PrintScreen
+
+  SHORTCUT_TXT.SE(25) = SEreplaceChr("{213} Q    QUIT SimplEd")
+  SHORTCUT.SE(47) = 5081  'WIN SHIFT Q
+END SUB
+
+SUB SEreadConfig(file AS STRING)
+  ON ERROR SKIP
+  OPEN CWD.SE+file FOR INPUT AS #1
+  IF MM.ERRNO<>0 THEN EXIT SUB
+
+  LOCAL STRING cmd, r, hlp
+  LOCAL INTEGER ind
+  DO WHILE NOT EOF(#1)
+    LINE INPUT #1,r
+    r = SEskipBlank(r)
+    IF r <> "" THEN
+      IF LEFT$(r,1)<>"'" THEN 'comment
+        IF LEFT$(r,1)="#" THEN 'command
+          cmd = LCASE$(MID$(r,2))
+        ELSE
+          SELECT CASE cmd
+            CASE "help-texts"
+              'index|text
+              ind = VAL(FIELD$(r, 1, "|"))      'row index (0-25)
+              hlp = LEFT$(SEreplaceChr(FIELD$(r, 2, "|")), 35) 'maximum row length to fit on the screen
+              IF hlp <> "" THEN
+                IF ind>=0 THEN
+                  IF ind<=25 THEN
+                    SHORTCUT_TXT.SE(ind) = hlp
+                  ENDIF
+                ENDIF
+              ENDIF
+
+            CASE "shortcuts"
+              'index|shortcut
+              ind = VAL(FIELD$(r, 1, "|"))  'row index (0-47)
+              hlp = FIELD$(r, 2, "|")       'special key code
+              IF VAL(hlp)<>0 THEN
+                IF ind>=0 THEN
+                  IF ind<=47 THEN
+                    SHORTCUT.SE(ind) = VAL(hlp)
+                  ENDIF
+                ENDIF
+              ENDIF
+
+          END SELECT 
+        ENDIF
+      ENDIF
+    ENDIF
+  LOOP
+  CLOSE #1      
+END SUB
+
+
