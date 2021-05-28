@@ -1,6 +1,26 @@
 # SimplEd
 Simple font editor for CMM2 with basic mouse support.
 
+#### v0.40
+	IMPORT from image doesn't erase font, so you can import new characters from different images into same font
+	moving character cursor in image scanning is faster with SHIFT (10 pixels)
+	some shortcuts are changed
+	1. moving character LEFT/RIGHT/TOP/BOTTOM/CENTER is now with ALT
+	2. WIN+SHIFT+F marks FIRST char in font (USED for preview and export)
+	3. WIN+SHIFT+L marks LAST char in font (USED for preview and export)
+	4. WIN+F jumps to FIRST char
+	5. WIN+L jumps to LAST char
+	6. all other keys jumps directly to this char!	
+
+#### v0.38
+	WIN+0 will find minimal WIDTH and HEIGHT for all characters from FIRST to LAST. It's useful after font scanning, so you can make the font size smaller. Becareful, the size is pure size (without margins). How to use it:
+ 	go through font and erase random points from scanning
+ 	get font size with WIN+0
+ 	put all chars to RIGHT TOP (ERASE MACRO, RECORD MACRO, R, T, PLAY MACRO to FONT)
+ 	adjust WIDTH and HEIGHT (WIDTH need to be multiplication of 4)
+ 	put all to the CENTER (ERASE MACRO, RECORD MACRO, C, PLAY MACRO to FONT)
+ 	go through font and with ALT+CRSR move chars to proper position if needed
+	
 #### v0.35
 	CTRL-S will SWPA between current character and CLIP
 	WIN+I can import also images - will be scanned into font
