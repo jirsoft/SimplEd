@@ -11,7 +11,7 @@ OPTION BREAK 0
 DBG OPTION BREAK 3
 
 'SimpleEd
-CONST VERSION.SE = "0.41"
+CONST VERSION.SE = "0.42"
 
 
 CONST MIN_GRF.SE = "0.11"
@@ -40,7 +40,7 @@ DIM INTEGER CMIN.SE = MINC.SE, CMAX.SE = MINC.SE
 DIM INTEGER W.SE = 8, H.SE = 8
 DIM INTEGER CW.SE = W.SE * (MM.HRES \ W.SE), CD.SE = (MM.HRES - CW.SE) \ 2
 
-DIM INTEGER SHORTCUT.SE(47) 'all 44 shortcuts for SimplEd
+DIM INTEGER SHORTCUT.SE(48) 'all 49 shortcuts for SimplEd
 DIM STRING SHORTCUT_TXT.SE(25) 'all 26 shortcut help strings for SimplEd
 
 
@@ -49,6 +49,7 @@ DIM INTEGER LIMIT.SE = 0
 DIM INTEGER CHAR.SE(MAXC.SE - MINC.SE, MAXH.SE - 1), ASC.SE = MINC.SE
 DIM INTEGER CLIP.SE(MAXH.SE - 1)
 DIM INTEGER UNDO.SE(MAXH.SE - 1)
+DIM INTEGER MEM.SE(MAXH.SE - 1)
 
 DIM INTEGER CX.SE = 0, CY.SE = 0, CON.SE = 0
 DIM INTEGER WW.SE = 8 * MAXW.SE
@@ -59,8 +60,6 @@ DIM STRING kk
 
 DIM INTEGER REC.SE = 0
 DIM STRING MACRO.SE = ""
-DIM STRING MACRO_NAME.SE(20)
-DIM STRING MACRO_CALL.SE(20)
 
 DIM INTEGER NUN.SE = -1, NUN_X.SE = -1, NUN_Y.SE = -1, NUN_L.SE = -1, NUN_R.SE = -1, NUN_SET.SE = 0
 DIM FLOAT NUNX.SE = 1, NUNY.SE = 1
@@ -312,6 +311,7 @@ SUB SEtestMouse
 
   IF MOU_L.SE <> l THEN 'left button change
     IF l THEN 'pressed
+
       SEprepareUndo
       IF y >= DY.SE AND y < DY.SE + H.SE * PIX.SE THEN
         IF x >= DX.SE AND x < DX.SE + W.SE * PIX.SE THEN
@@ -445,9 +445,13 @@ SUB SEkey(kk AS STRING)
   IF (m AND 8) OR (m AND 128) THEN INC mm, 2000 'SHIFT
 
   INC k, mm
-  DBG TEXT MM.HRES, 0, STR$(k,4)+"/"+ STR$(m,2),"RT",,,RGB(WHITE),RGB(NOTBLACK)
+  'DBG TEXT MM.HRES, 0, STR$(k,4)+"/"+ STR$(m,2),"RT",,,RGB(WHITE),RGB(NOTBLACK)
 
   SELECT CASE k
+    CASE 145
+    'F1=HELP 
+      SEshowHelp
+
     'cursor up
     CASE SHORTCUT.SE(00) 
       IF CY.SE > 0 THEN
@@ -552,6 +556,15 @@ SUB SEkey(kk AS STRING)
       SEprepareUndo
       SEmacroAdd(15)
       SEorFromClipboard
+      SEcursorS(1)
+      SEdrawCharB
+      SEcursorB(1)
+
+    'CTRL-A, AND-paste clipboard to character
+    CASE SHORTCUT.SE(48)
+      SEprepareUndo
+      SEmacroAdd(22)
+      SEandFromClipboard
       SEcursorS(1)
       SEdrawCharB
       SEcursorB(1)
@@ -801,9 +814,18 @@ SUB SEinit
   ENDIF
 
   RESTORE macro_def
+  LOCAL STRING nm, cl
+  DIM INTEGER MACRO_COUNT.SE = -1
+  DO
+    INC MACRO_COUNT.SE
+    READ nm, cl
+  LOOP WHILE nm <> ""
+  DIM STRING MACRO_NAME.SE(MACRO_COUNT.SE), MACRO_CALL.SE(MACRO_COUNT.SE)
+  RESTORE macro_def
   FOR i = 0 TO BOUND(MACRO_NAME.SE())
     READ MACRO_NAME.SE(i), MACRO_CALL.SE(i)
   NEXT i
+
   SEreadDefaults
   SEreadConfig("SimplEd.CFG")
   SEhelp
@@ -837,6 +859,11 @@ SUB SEinit
   DATA "Rasterize VER", "SErasterVer"
   DATA "Skew char left", "SEskewLeft"
   DATA "Skew char right", "SEskewRight"  
+  DATA "Bold", "SEbold"
+  DATA "AND from CLIP", "SEandFromClipboard"
+  DATA "Save CLIP to memory", "SEsaveClip"
+  DATA "Load CLIP from memory", "SEloadClip"
+  DATA "", ""
 END SUB
 
 SUB SEcursorS(onOff AS INTEGER)
@@ -1271,6 +1298,16 @@ SUB SEorFromClipboard
 
   FOR i = 0 TO H.SE - 1
      CHAR.SE(ASC.SE - MINC.SE, i) = CLIP.SE(i) OR CHAR.SE(ASC.SE - MINC.SE, i)
+  NEXT i
+END SUB
+
+SUB SEandFromClipboard
+  'copy char FROM CLIP with LOGICAL AND (combine char and CLIP)
+
+  LOCAL INTEGER i
+
+  FOR i = 0 TO H.SE - 1
+     CHAR.SE(ASC.SE - MINC.SE, i) = CLIP.SE(i) AND CHAR.SE(ASC.SE - MINC.SE, i)
   NEXT i
 END SUB
 
@@ -1941,37 +1978,6 @@ SUB SEpreviewFont
   PAGE COPY 1 TO 0
 END SUB
 
-SUB SEspecial
-  'SPECIAL functions
-
-  LOCAL STRING spec(4)
-  spec(1) = "Rasterize horizontal"
-  spec(2) = "Rasterize vertical"
-  spec(3) = "Skew right"
-  spec(4) = "Skew left"
-
-  LOCAL STRING f = TUIgetItem("SPECIAL FUNCTIONS", "Select function:", spec())
-  IF f = "" THEN EXIT SUB
-
-  SELECT CASE f
-    CASE spec(1)
-      SEmacroAdd(17)
-      SErasterHor
-
-    CASE spec(2)
-      SEmacroAdd(18)
-      SErasterVer
-
-    CASE spec(3)
-      SEmacroAdd(19)
-      SEskewRight
-
-    CASE spec(4)
-      SEmacroAdd(20)
-      SEskewLeft
-  END SELECT
-END SUB
-
 SUB SErasterHor
   'HORIZONTAL rasterizing
 
@@ -2040,7 +2046,7 @@ END SUB
 SUB SEmacros
   'macro functions
 
-  LOCAL INTEGER m = TUIchoice("MACRO functions", "Record START,Record STOP,Play to CHAR, Play to FONT,Erase macro,Show macro")
+  LOCAL INTEGER m = TUIchoice("MACRO functions", "Record START,Record STOP,Play to CHAR, Play to FONT,Erase macro,Show macro,Save macro to file,Load macro from file")
 
   SELECT CASE m
     CASE 0
@@ -2063,6 +2069,12 @@ SUB SEmacros
       
     CASE 5
       SEmacroShow
+
+    CASE 6
+      SEsaveMacro
+
+    CASE 7
+      SEloadMacro
   END SELECT
 END SUB
 
@@ -2603,10 +2615,10 @@ SUB SEhelp
   TEXT dx, dy, SHORTCUT_TXT.SE(23), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21  
   TEXT dx, dy, SHORTCUT_TXT.SE(24), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21
   TEXT dx, dy, SHORTCUT_TXT.SE(25), "LT",,,RGB(CYAN), RGB(NOTBLACK):INC dy, 21
-  TEXT dx, dy, " Any other key jumps to this char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  TEXT dx, dy, "F1 Additional help", "LT",,,RGB(CYAN), RGB(NOTBLACK)
+  'TEXT dx, dy, " Any other key jumps to this char", "LT",,,RGB(CYAN), RGB(NOTBLACK)
 END SUB
 
-'DIM STRING SHORTCUT.SE(43) 'all 44 shortcuts for SimplEd
 SUB SEreadDefaults
   SHORTCUT_TXT.SE(00) = SEreplaceChr("{225} {226} {228} {227}   EDITOR cursor (SHFT fast)")
   SHORTCUT.SE(00) = 0128  'up
@@ -2628,8 +2640,9 @@ SUB SEreadDefaults
   SHORTCUT_TXT.SE(03) = SEreplaceChr("CTRL s    SWAP char and CLIP")
   SHORTCUT.SE(11) = 4019  'CTRL s
 
-  SHORTCUT_TXT.SE(04) = SEreplaceChr("CTRL o    OR from CLIP (COMBINE)")
+  SHORTCUT_TXT.SE(04) = SEreplaceChr("CTRL o/a  OR/AND from CLIP (COMBINE)")
   SHORTCUT.SE(12) = 4015  'CTRL o
+  SHORTCUT.SE(48) = 4001  'CTRL a
 
   SHORTCUT_TXT.SE(05) = SEreplaceChr("CTRL z    UNDO/REDO last change")
   SHORTCUT.SE(13) = 4026  'CTRL z
@@ -2757,4 +2770,180 @@ SUB SEreadConfig(file AS STRING)
   CLOSE #1      
 END SUB
 
+SUB SEbold
+  'BOLD char (horizontal)
+  
+  LOCAL INTEGER x, y, p
+  
+  FOR y = 0 TO H.SE - 1
+    p = 0
+    FOR x = W.SE - 1 TO 0 STEP -1
+      IF (1<<x) AND CHAR.SE(ASC.SE - MINC.SE, y) THEN
+        p = 1
+      ELSE
+        IF p THEN
+          CHAR.SE(ASC.SE - MINC.SE, y) = CHAR.SE(ASC.SE - MINC.SE, y) OR (1<<x)
+          p = 0
+        ENDIF
+      ENDIF
+    NEXT x
+  NEXT y
+END SUB
+
+SUB SEshowHelp
+  BLIT READ #1, 100,100,MM.HRES-200,MM.VRES-200
+  
+  IF MM.INFO(VERSION)>=5.07 THEN
+    BOX AND_PIXELS 100,100,MM.HRES-200,MM.VRES-200, &h707070
+    BOX 100,100,MM.HRES-200,MM.VRES-200,1,RGB(CYAN)
+  ELSE
+    BOX 100,100,MM.HRES-200,MM.VRES-200,1,RGB(CYAN),RGB(NOTBLACK)
+  ENDIF
+  TEXT 110,110,"Special functions:","LT",8,,RGB(YELLOW),-1
+  TEXT 110,110+01*16,"Rasterize horizontal   make char more gray by remove some H-lines","LT",8,,RGB(WHITE),-1 
+  TEXT 110,110+02*16,"Rasterize verical      make char more gray by remove some H-lines","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+03*16,"Skew right             skew char to right (reverse italic)","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+04*16,"Skew left              skew char to left (italic)","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+05*16,"Bold                   make char bolder by extend vertical lines","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+06*16,"Save CLIP to memory    save clipboard for later use","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+07*16,"Load CLIP from memory  load clipboard from memory (erase when empty)","LT",8,,RGB(WHITE),-1
+  
+  TEXT 110,110+09*16,"For using fonts from other computer or internet, simply export complete","LT",8,,RGB(YELLOW),-1
+  TEXT 110,110+10*16,"font as picture, then import it and scan it into separate characters.","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+11*16,CHR$(213)+"i->Select image->set ROWs/COLs->Adjust GRID->ENTER->Map CHARs->Repeat...","LT",8,,RGB(WHITE),-1
+  
+  TEXT 110,110+13*16,"When you need to combine more operations on complete font, simply use","LT",8,,RGB(YELLOW),-1
+  TEXT 110,110+14*16,"macro functions and play them to complete font.","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+15*16,CHR$(213)+"m->Record START->do all operations->"+CHR$(213)+"m->Record STOP->"+CHR$(213)+"m->Play to FONT","LT",8,,RGB(WHITE),-1
+
+  TEXT 110,110+17*16,"For sizing the font to minimal size, do following:","LT",8,,RGB(YELLOW),-1
+  TEXT 110,110+18*16,CHR$(213)+"m->Record START->ALT t->ALT r->"+CHR$(213)+"m->Record STOP->"+CHR$(213)+"m->Play to FONT","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+19*16,CHR$(213)+"0->Memorize width and height->"+CHR$(213)+"w->Set width->"+CHR$(213)+"h->Set height","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+20*16,CHR$(213)+"m->Record START->ALT c->"+CHR$(213)+"m->Record STOP->"+CHR$(213)+"m->Play to FONT","LT",8,,RGB(WHITE),-1
+  TEXT 110,110+21*16,"Adjust positions of characters, that shouldn't be centered...","LT",8,,RGB(WHITE),-1
+  
+  DO WHILE INKEY$="":LOOP
+  BLIT WRITE #1, 100, 100
+  BLIT CLOSE #1
+END SUB
+
+SUB SEspecial
+  'SPECIAL functions
+
+  LOCAL STRING spec(7)
+  spec(1) = "Rasterize horizontal"
+  spec(2) = "Rasterize vertical"
+  spec(3) = "Skew right"
+  spec(4) = "Skew left"
+  spec(5) = "Bold"
+  spec(6) = "Save CLIP to memory"
+  spec(7) = "Load CLIP from memory"
+
+  LOCAL STRING f = TUIgetItem("SPECIAL FUNCTIONS", "Select function:", spec())
+  IF f = "" THEN EXIT SUB
+
+  SELECT CASE f
+    CASE spec(1)
+      SEmacroAdd(17)
+      SErasterHor
+
+    CASE spec(2)
+      SEmacroAdd(18)
+      SErasterVer
+
+    CASE spec(3)
+      SEmacroAdd(19)
+      SEskewRight
+
+    CASE spec(4)
+      SEmacroAdd(20)
+      SEskewLeft
+
+    CASE spec(5)
+      SEmacroAdd(21)
+      SEbold
+
+    CASE spec(6)
+      SEmacroAdd(23)
+      SEsaveClip
+
+    CASE spec(7)
+      SEmacroAdd(24)
+      SEloadClip
+
+  END SELECT
+END SUB
+
+SUB SEsaveClip
+  'save CLIP to memory
+
+  LOCAL INTEGER i
+
+  FOR i = 0 TO H.SE - 1
+    MEM.SE(i) = CLIP.SE(i)
+  NEXT i
+END SUB
+
+SUB SEloadClip
+  'load CLIP from memory
+
+  LOCAL INTEGER i
+
+  FOR i = 0 TO H.SE - 1
+    CLIP.SE(i) = MEM.SE(i)
+  NEXT i
+  SEshowClipboard
+END SUB
+
+SUB SEsaveMacro
+  'save MACRO.SE to file
+
+  IF MACRO.SE <> "" THEN
+    LOCAL INTEGER i
+    LOCAL STRING mname = "Macro1"
+    mname  = TUIinput("SAVE MACRO", "Enter name:", mname, NAME_CHARS.SE)
+
+    IF mname <> "" THEN
+      CAT mname, ".TXT"
+      IF NOT SEexist(EXPORT.SE) THEN
+        MKDIR EXPORT.SE
+      ENDIF
+      IF SEexist(EXPORT.SE + "/" + mname) THEN
+        IF NOT TUIquestion("SAVE MACRO", "File '" + mname +"' exists, replace it?") THEN
+          EXIT SUB
+        ENDIF
+      ENDIF
+
+      LOCAL STRING dialog = TUIwaitingON("SAVE MACRO")
+      OPEN EXPORT.SE + "/" + mname FOR OUTPUT AS #1
+      PRINT #1,"'SimplEd macro recorded on " + DATE$ + " at " + TIME$
+      FOR i = 1 TO LEN(MACRO.SE)
+        PRINT #1, STR$(ASC(MID$(MACRO.SE, i, 1)), 3) + "  '" + MACRO_NAME.SE(ASC(MID$(MACRO.SE, i, 1)))
+      NEXT i
+      CLOSE #1
+      TUIwaitingOFF(dialog)
+    ENDIF
+  ENDIF
+END SUB
+
+SUB SEloadMacro
+  'load MACRO.SE from file (.TXT)
+
+  LOCAL STRING r, fileName = TUIfileSelect(EXPORT.SE, ".TXT")  
+  IF fileName <> "" THEN
+    LOCAL STRING dialog = TUIwaitingON("LOAD MACRO")
+    OPEN fileName FOR INPUT AS #1
+    LINE INPUT #1, r
+    IF LEFT$(r, 26)="'SimplEd macro recorded on" THEN
+      LOCAL INTEGER i
+      MACRO.SE = ""
+      DO WHILE NOT EOF(#1)
+        LINE INPUT #1, r
+        CAT MACRO.SE, CHR$(VAL(LEFT$(r, 3)))
+      LOOP
+    ENDIF
+    CLOSE #1
+    TUIwaitingOFF(dialog)
+  ENDIF
+END SUB
 

@@ -1,0 +1,20 @@
+'SimplEd macro recorded on 17-07-2021 at 23:24:45
+ 10  'Invert char
+ 13  'COPY to CLIP
+ 23  'Save CLIP to memory
+ 10  'Invert char
+ 13  'COPY to CLIP
+  6  'Shift/rotate left
+ 15  'OR from CLIP
+  7  'Shift/rotate right
+  7  'Shift/rotate right
+ 15  'OR from CLIP
+  6  'Shift/rotate left
+  9  'Shift/rotate down
+ 15  'OR from CLIP
+  8  'Shift/rotate up
+  8  'Shift/rotate up
+ 15  'OR from CLIP
+  9  'Shift/rotate down
+ 24  'Load CLIP from memory
+ 22  'AND from CLIP
