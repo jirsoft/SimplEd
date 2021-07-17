@@ -4,7 +4,7 @@ Simple font editor for CMM2 with basic mouse support.
 #### v0.42
 	CLIP can be ANDed with current character (before just OR)
 	CLIP can be saved and loaded to/from memory, so more uses
-	MACRO can be saved into TXT file and loaded back (reusable library of macros...)
+	MACRO can be saved into TXT file and loaded back (MacroOutline.TXT is included)
 	F1 is used for fast additional help (now just basic)
 
 #### v0.41
