@@ -1,6 +1,12 @@
 # SimplEd
 Simple font editor for CMM2 with basic mouse support.
 
+#### v0.42
+	CLIP can be ANDed with current character (before just OR)
+	CLIP can be saved and loaded to/from memory, so more uses
+	MACRO can be saved into TXT file and loaded back (MacroOutline.TXT is included)
+	F1 is used for fast additional help (now just basic)
+
 #### v0.41
 	Keys can now be defined in SimplEd.CFG file, when this file not exists, default keys are used
 	(sample SimplEd.CFG file is provided, with comments inside, WIN is replaced with other keys)
